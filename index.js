@@ -31,7 +31,7 @@ const plans = {
 let userPlan = {};
 let selectedPlan = {};
 
-// 🚀 START UI
+// 🚀 START
 bot.onText(/\/start/, (msg) => {
   bot.sendMessage(msg.chat.id,
 `🔥 COBRA VIP PANEL 🔥
@@ -56,7 +56,7 @@ bot.onText(/\/start/, (msg) => {
 // 💬 MESSAGE HANDLER
 bot.on("message", (msg) => {
 
-  // ➕ ADMIN ADD KEYS (NEW UI)
+  // ➕ ADMIN ADD STOCK (PLAN SELECT KE BAAD)
   if (selectedPlan[msg.from.id]) {
 
     let plan = selectedPlan[msg.from.id];
@@ -77,7 +77,7 @@ ${plan}: ${keys[plan].length} KEYS`);
     return;
   }
 
-  // 💎 PLAN SELECT
+  // 💎 PLAN SELECT (USER)
   if (plans[msg.text]) {
     userPlan[msg.from.id] = plans[msg.text];
 
@@ -144,15 +144,18 @@ bot.on("callback_query", (query) => {
     let expiry = new Date();
     expiry.setDate(expiry.getDate() + plan.days);
 
+    // 🔥 FINAL KEY MESSAGE (COPY FRIENDLY)
     bot.sendMessage(userId,
 `✅ PAYMENT VERIFIED
 
 ━━━━━━━━━━━━━━━
-🔑 KEY: ${key}
+🔑 KEY:
+\`${key}\`
 📅 EXPIRES: ${expiry.toDateString()}
 ━━━━━━━━━━━━━━━
 
-🎉 Enjoy, Have a Nice Day 🚀`);
+🎉 Enjoy, Have a Nice Day 🚀`,
+{ parse_mode: "Markdown" });
 
     // ⚠️ LOW STOCK ALERT
     if (keys[plan.id].length <= 1) {
@@ -187,7 +190,7 @@ bot.on("callback_query", (query) => {
     });
   }
 
-  // 🎯 PLAN SELECT FOR STOCK
+  // 🎯 PLAN SELECT (ADMIN)
   if (data.startsWith("plan")) {
 
     selectedPlan[query.from.id] = data;
