@@ -127,7 +127,7 @@ UTR: ${msg.text}`,
     bot.sendMessage(userId,
 `✅ STOCK UPDATED
 
-${selectedPlan[userId]}: ${keys[selectedPlan[userId]].length}`);
+${selectedPlan[userId]} ➜ ${keys[selectedPlan[userId]].length}`);
     selectedPlan[userId]=null;
     return;
   }
@@ -183,7 +183,7 @@ UPI:
 {reply_markup:{force_reply:true}});
   }
 
-  // VERIFY (FIXED 🔥)
+  // ✅ VERIFY
   if(data.startsWith("approve_")){
     let uid = data.split("_")[1];
     let plan = userPlan[uid];
@@ -220,13 +220,24 @@ UPI:
 {parse_mode:"Markdown"});
   }
 
-  // REJECT
+  // ❌ REJECT
   if(data.startsWith("reject_")){
     let uid = data.split("_")[1];
     bot.sendMessage(uid,"❌ PAYMENT REJECTED\n⚠️ Try Again");
   }
 
-  // ADMIN PANEL
+  // 📦 VIEW STOCK (NEW 🔥)
+  if(data==="viewstock"){
+    let msg = "📦 STOCK STATUS\n\n";
+
+    for(let p in keys){
+      msg += `${p.toUpperCase()} ➜ ${keys[p].length}\n`;
+    }
+
+    bot.sendMessage(userId,msg);
+  }
+
+  // ➕ ADD STOCK
   if(data==="addstock"){
     bot.sendMessage(userId,"SELECT PLAN",{
       reply_markup:{
@@ -247,13 +258,14 @@ UPI:
   }
 });
 
-// ADMIN COMMAND
+// ADMIN PANEL
 bot.onText(/\/admin/, (msg)=>{
   if(msg.from.id!==ADMIN_ID) return;
 
   bot.sendMessage(msg.chat.id,"⚙️ ADMIN PANEL",{
     reply_markup:{
       inline_keyboard:[
+        [{text:"📦 VIEW STOCK",callback_data:"viewstock"}],
         [{text:"➕ ADD STOCK",callback_data:"addstock"}]
       ]
     }
