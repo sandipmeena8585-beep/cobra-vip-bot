@@ -2,7 +2,6 @@ const TelegramBot = require('node-telegram-bot-api');
 const express = require("express");
 const fs = require("fs");
 
-// 🔑 CONFIG
 const token = "8304628992:AAFANNXH6syLC1FIuHxKeYd8MIyaWXNTXg4";
 const ADMIN_ID = 7707237527;
 
@@ -15,7 +14,7 @@ const bot = new TelegramBot(token, { polling: true });
 
 // 🌐 SERVER
 const app = express();
-app.get("/", (req, res) => res.send("Running"));
+app.get("/", (req,res)=>res.send("Running"));
 app.listen(process.env.PORT || 3000);
 
 // 📦 LOAD KEYS
@@ -23,295 +22,222 @@ let keys = JSON.parse(fs.readFileSync("keys.json"));
 
 // 💎 PLANS
 const plans = {
-  "💎 1 DAY - 100₹": { id: "plan1", days: 1 },
-  "💎 7 DAY - 400₹": { id: "plan2", days: 7 },
-  "💎 15 DAY - 700₹": { id: "plan3", days: 15 },
-  "💎 30 DAY - 900₹": { id: "plan4", days: 30 },
-  "💎 60 DAY - 1200₹": { id: "plan5", days: 60 }
+  plan1: { name: "💎 1 DAY - 100₹", days: 1 },
+  plan2: { name: "💎 7 DAY - 400₹", days: 7 },
+  plan3: { name: "💎 15 DAY - 700₹", days: 15 },
+  plan4: { name: "💎 30 DAY - 900₹", days: 30 },
+  plan5: { name: "💎 60 DAY - 1200₹", days: 60 }
 };
 
 let userPlan = {};
 let selectedPlan = {};
-let requestCount = {};
+let waitingScreenshot = {};
 let tempUTR = {};
 
-// 🚀 START
-bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id,
+// 🔥 MENU FUNCTION
+function showMenu(chatId) {
+  bot.sendMessage(chatId,
 `🔥 COBRA VIP PANEL 🔥
 
 💎 PREMIUM STORE
 
 ━━━━━━━━━━━━━━━━━━
 ⚡ FAST DELIVERY
-🔐 SECURE SYSTEM
+🔐 SECURE ACCESS
 ━━━━━━━━━━━━━━━━━━
 
 👇 SELECT YOUR PLAN`,
   {
     reply_markup: {
-      keyboard: Object.keys(plans).map(p => [p]),
-      resize_keyboard: true
+      inline_keyboard: [
+        [{ text: plans.plan1.name, callback_data: "buy_plan1" }],
+        [{ text: plans.plan2.name, callback_data: "buy_plan2" }],
+        [{ text: plans.plan3.name, callback_data: "buy_plan3" }],
+        [{ text: plans.plan4.name, callback_data: "buy_plan4" }],
+        [{ text: plans.plan5.name, callback_data: "buy_plan5" }]
+      ]
     }
   });
+}
+
+// START
+bot.onText(/\/start/, (msg)=>{
+  showMenu(msg.chat.id);
 });
 
-// 💬 MESSAGE
-bot.on("message", (msg) => {
-
+// MESSAGE
+bot.on("message",(msg)=>{
   const userId = msg.from.id;
 
-  // 🔥 UTR FORCE REPLY INPUT
-  if (msg.reply_to_message && msg.reply_to_message.text.includes("ENTER YOUR UTR")) {
+  // 📸 SCREENSHOT
+  if(waitingScreenshot[userId] && msg.photo){
+    let plan = userPlan[userId];
 
-    const plan = userPlan[userId];
-    if (!plan) return;
-
-    tempUTR[userId] = msg.text;
-
-    bot.sendMessage(msg.chat.id,
-`✅ UTR ADDED
-
-🧾 YOUR UTR:
-\`${msg.text}\`
-
-━━━━━━━━━━━━━━━━━━
-👇 CLICK SUBMIT`,
-    {
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "✅ SUBMIT PAYMENT", callback_data: "submit_utr" }]
-        ]
-      }
-    });
-
-    return;
-  }
-
-  // ➕ ADMIN STOCK
-  if (selectedPlan[userId]) {
-
-    let plan = selectedPlan[userId];
-
-    msg.text.split("\n").forEach(k => {
-      if (keys[plan]) keys[plan].push(k.trim());
-    });
-
-    fs.writeFileSync("keys.json", JSON.stringify(keys, null, 2));
-
-    bot.sendMessage(msg.chat.id,
-`✅ STOCK UPDATED
-
-📦 ${plan.toUpperCase()} ➜ ${keys[plan].length}`);
-
-    selectedPlan[userId] = null;
-    return;
-  }
-
-  // 💎 PLAN SELECT
-  if (plans[msg.text]) {
-
-    userPlan[userId] = plans[msg.text];
-
-    bot.sendPhoto(msg.chat.id, QR_LINK, {
+    bot.sendPhoto(ADMIN_ID, msg.photo[msg.photo.length-1].file_id, {
       caption:
-`💰 PAYMENT DETAILS
+`📸 PAYMENT PROOF
 
-👤 NAME: ${PAYMENT_NAME}
-
-🏦 UPI ID:
-\`${UPI_ID}\`
-
-━━━━━━━━━━━━━━━━━━
-📌 SCAN QR & PAY
-━━━━━━━━━━━━━━━━━━
-
-👇 AFTER PAYMENT CLICK BELOW`,
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "💸 ENTER UTR", callback_data: "enter_utr" }]
-        ]
-      }
-    });
-
-    return;
-  }
-});
-
-// 🔘 BUTTON HANDLER
-bot.on("callback_query", (query) => {
-
-  const data = query.data;
-  const userId = query.from.id;
-
-  // 💸 ENTER UTR
-  if (data === "enter_utr") {
-
-    bot.sendMessage(query.message.chat.id,
-`🧾 ENTER YOUR UTR NUMBER:
-
-Example: 1234567890`,
-    {
-      reply_markup: {
-        force_reply: true
-      }
-    });
-
-    bot.answerCallbackQuery(query.id);
-  }
-
-  // ✅ SUBMIT
-  if (data === "submit_utr") {
-
-    const plan = userPlan[userId];
-    const utr = tempUTR[userId];
-
-    if (!plan || !utr) return;
-
-    if (!requestCount[userId]) requestCount[userId] = 0;
-
-    if (requestCount[userId] >= 3) {
-      bot.sendMessage(userId, "❌ LIMIT REACHED (3 TIMES)");
-      return;
-    }
-
-    requestCount[userId]++;
-
-    let planName = Object.keys(plans).find(p => plans[p].id === plan.id);
-
-    bot.sendMessage(ADMIN_ID,
-`📥 PAYMENT REQUEST
-
-👤 USER: ${userId}
-💎 PLAN: ${planName}
-
-🧾 UTR:
-${utr}
-
-🔁 ATTEMPT: ${requestCount[userId]}/3`,
-    {
-      reply_markup: {
-        inline_keyboard: [[
-          { text: "✅ VERIFY", callback_data: `approve_${userId}` },
-          { text: "❌ REJECT", callback_data: `reject_${userId}` }
+USER: ${userId}
+PLAN: ${plan.name}`,
+      reply_markup:{
+        inline_keyboard:[[
+          {text:"✅ VERIFY",callback_data:`approve_${userId}`},
+          {text:"❌ REJECT",callback_data:`reject_${userId}`}
         ]]
       }
     });
 
-    bot.sendMessage(userId,
-`⏳ PLEASE WAIT...
-
-ADMIN VERIFY YOUR PAYMENT`);
+    bot.sendMessage(userId,"⏳ WAIT ADMIN VERIFY");
+    waitingScreenshot[userId]=false;
+    return;
   }
 
-  // ✅ VERIFY
-  if (data.startsWith("approve_")) {
+  // 🧾 UTR
+  if(msg.reply_to_message && msg.reply_to_message.text.includes("ENTER YOUR UTR")){
+    let plan = userPlan[userId];
 
-    const userId = data.split("_")[1];
-    const plan = userPlan[userId];
+    bot.sendMessage(ADMIN_ID,
+`📥 PAYMENT REQUEST
 
-    let stock = keys[plan.id];
+USER: ${userId}
+PLAN: ${plan.name}
 
-    if (!stock || stock.length === 0) {
-      bot.sendMessage(ADMIN_ID, `❌ STOCK EMPTY: ${plan.id}`);
-      return;
-    }
+UTR: ${msg.text}`,
+{
+  reply_markup:{
+    inline_keyboard:[[
+      {text:"✅ VERIFY",callback_data:`approve_${userId}`},
+      {text:"❌ REJECT",callback_data:`reject_${userId}`}
+    ]]
+  }
+});
 
-    const key = stock.shift();
-    fs.writeFileSync("keys.json", JSON.stringify(keys, null, 2));
-
-    let expiry = new Date();
-    expiry.setDate(expiry.getDate() + plan.days);
-
-    requestCount[userId] = 0;
-
-    bot.sendMessage(userId,
-`✅ PAYMENT VERIFIED
-
-━━━━━━━━━━━━━━━━━━
-
-🔥 COBRA SERVER MOD 🔥
-
-━━━━━━━━━━━━━━━━━━
-
-🔑 KEY:
-\`${key}\`
-
-📅 EXPIRES:
-${expiry.toDateString()}
-
-━━━━━━━━━━━━━━━━━━
-
-🔗 PAID CHANNEL:
-${CHANNEL_LINK}
-
-━━━━━━━━━━━━━━━━━━
-
-🎉 ENJOY, HAVE A NICE DAY 🚀`,
-{ parse_mode: "Markdown" });
-
-    if (keys[plan.id].length <= 1) {
-      bot.sendMessage(ADMIN_ID, `⚠️ LOW STOCK: ${plan.id}`);
-    }
+    bot.sendMessage(userId,"⏳ WAIT ADMIN VERIFY");
+    return;
   }
 
-  // ❌ REJECT
-  if (data.startsWith("reject_")) {
+  // ➕ ADMIN STOCK
+  if(selectedPlan[userId]){
+    msg.text.split("\n").forEach(k=>{
+      keys[selectedPlan[userId]].push(k.trim());
+    });
 
-    const userId = data.split("_")[1];
-
-    bot.sendMessage(userId,
-`❌ PAYMENT REJECTED
-
-⚠️ SEND CORRECT PAYMENT PROOF`);
-
-    bot.sendMessage(ADMIN_ID, `❌ REJECTED USER: ${userId}`);
+    fs.writeFileSync("keys.json",JSON.stringify(keys,null,2));
+    bot.sendMessage(userId,"✅ STOCK UPDATED");
+    selectedPlan[userId]=null;
+    return;
   }
 
-  // ➕ ADD STOCK
-  if (data === "addstock") {
+  // 🤖 AUTO MENU
+  if(!msg.text.startsWith("/")){
+    showMenu(msg.chat.id);
+  }
+});
 
-    bot.sendMessage(query.message.chat.id,
-`💎 SELECT PLAN`,
-    {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "1 DAY", callback_data: "plan1" }],
-          [{ text: "7 DAY", callback_data: "plan2" }],
-          [{ text: "15 DAY", callback_data: "plan3" }],
-          [{ text: "30 DAY", callback_data: "plan4" }],
-          [{ text: "60 DAY", callback_data: "plan5" }]
+// BUTTONS
+bot.on("callback_query",(query)=>{
+
+  const data = query.data;
+  const userId = query.from.id;
+
+  // PLAN SELECT
+  if(data.startsWith("buy_")){
+    let planId = data.split("_")[1];
+
+    userPlan[userId] = plans[planId];
+
+    bot.sendPhoto(userId,QR_LINK,{
+      caption:
+`💰 PAYMENT DETAILS
+
+👤 ${PAYMENT_NAME}
+
+UPI:
+\`${UPI_ID}\`
+
+👇 CHOOSE OPTION`,
+      parse_mode:"Markdown",
+      reply_markup:{
+        inline_keyboard:[
+          [{text:"📸 SCREENSHOT",callback_data:"screenshot"}],
+          [{text:"💳 ENTER UTR",callback_data:"enter_utr"}]
         ]
       }
     });
   }
 
-  // PLAN SELECT ADMIN
-  if (data.startsWith("plan")) {
+  // SCREENSHOT
+  if(data==="screenshot"){
+    waitingScreenshot[userId]=true;
+    bot.sendMessage(userId,"📸 SEND SCREENSHOT");
+  }
 
-    selectedPlan[userId] = data;
+  // UTR
+  if(data==="enter_utr"){
+    bot.sendMessage(userId,
+`🧾 ENTER YOUR UTR`,
+{reply_markup:{force_reply:true}});
+  }
 
-    bot.sendMessage(query.message.chat.id,
-`➕ SEND KEYS
+  // VERIFY
+  if(data.startsWith("approve_")){
+    let userId = data.split("_")[1];
+    let plan = userPlan[userId];
 
-Example:
-COBRASERVER>1D-XXXX`);
+    let key = keys[Object.keys(plans).find(p=>plans[p]===plan)].shift();
+
+    fs.writeFileSync("keys.json",JSON.stringify(keys,null,2));
+
+    let expiry = new Date();
+    expiry.setDate(expiry.getDate()+plan.days);
+
+    bot.sendMessage(userId,
+`✅ VERIFIED
+
+🔑 KEY:
+\`${key}\`
+
+📅 ${expiry.toDateString()}
+
+🔗 ${CHANNEL_LINK}`,
+{parse_mode:"Markdown"});
+  }
+
+  // REJECT
+  if(data.startsWith("reject_")){
+    let userId = data.split("_")[1];
+    bot.sendMessage(userId,"❌ PAYMENT REJECTED");
+  }
+
+  // ADMIN
+  if(data==="addstock"){
+    bot.sendMessage(userId,"SELECT PLAN",{
+      reply_markup:{
+        inline_keyboard:[
+          [{text:"1D",callback_data:"plan1"}],
+          [{text:"7D",callback_data:"plan2"}],
+          [{text:"15D",callback_data:"plan3"}],
+          [{text:"30D",callback_data:"plan4"}],
+          [{text:"60D",callback_data:"plan5"}]
+        ]
+      }
+    });
+  }
+
+  if(data.startsWith("plan")){
+    selectedPlan[userId]=data;
+    bot.sendMessage(userId,"SEND KEYS");
   }
 });
 
-// 👑 ADMIN PANEL
-bot.onText(/\/admin/, (msg) => {
+// ADMIN PANEL
+bot.onText(/\/admin/, (msg)=>{
+  if(msg.from.id!==ADMIN_ID) return;
 
-  if (msg.from.id !== ADMIN_ID) return;
-
-  bot.sendMessage(msg.chat.id,
-`👑 ADMIN PANEL`,
-  {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "➕ ADD STOCK", callback_data: "addstock" }]
+  bot.sendMessage(msg.chat.id,"ADMIN PANEL",{
+    reply_markup:{
+      inline_keyboard:[
+        [{text:"➕ ADD STOCK",callback_data:"addstock"}]
       ]
     }
   });
