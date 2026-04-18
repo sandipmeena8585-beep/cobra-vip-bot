@@ -108,4 +108,4 @@ bot.on("callback_query", (query) => {
 
     bot.answerCallbackQuery(query.id, { text: "Rejected ❌" });
   }
-});
+});const QR_LINK = "https://raw.githubusercontent.com/USERNAME/cobra-bot/main/upi_qr.png";
