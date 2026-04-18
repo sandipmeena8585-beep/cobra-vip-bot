@@ -8,6 +8,7 @@ const ADMIN_ID = 7707237527;
 
 const QR_LINK = "https://raw.githubusercontent.com/sandipmeena8585-beep/cobra-bot/main/upi_qr.png";
 const UPI_ID = "godxcobra@axl";
+const CHANNEL_LINK = "https://t.me/+wRZN39fdVcRkYTM9";
 
 const bot = new TelegramBot(token, { polling: true });
 
@@ -39,13 +40,13 @@ bot.onText(/\/start/, (msg) => {
 
 💎 PREMIUM ACCESS STORE
 
-━━━━━━━━━━━━━━━
-⚡ Instant Delivery
-🔐 Secure Access
-💰 Trusted Payment
-━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━
+⚡ FAST DELIVERY  
+🔐 SECURE SYSTEM  
+💰 TRUSTED SERVICE  
+━━━━━━━━━━━━━━━━━━
 
-👇 Select Your Plan`,
+👇 SELECT YOUR PLAN`,
   {
     reply_markup: {
       keyboard: Object.keys(plans).map(p => [p]),
@@ -54,7 +55,7 @@ bot.onText(/\/start/, (msg) => {
   });
 });
 
-// 💬 MESSAGE HANDLER
+// 💬 MESSAGE
 bot.on("message", (msg) => {
 
   // ➕ ADMIN STOCK ADD
@@ -68,7 +69,11 @@ bot.on("message", (msg) => {
 
     fs.writeFileSync("keys.json", JSON.stringify(keys, null, 2));
 
-    bot.sendMessage(msg.chat.id, `✅ STOCK UPDATED\n\n${plan}: ${keys[plan].length}`);
+    bot.sendMessage(msg.chat.id,
+`✅ STOCK UPDATED
+
+📦 ${plan.toUpperCase()} ➜ ${keys[plan].length} KEYS`);
+
     selectedPlan[msg.from.id] = null;
     return;
   }
@@ -83,10 +88,10 @@ bot.on("message", (msg) => {
 
 🏦 UPI ID: ${UPI_ID}
 
-━━━━━━━━━━━━━━━
-📌 Scan QR & Pay
-📩 Send Screenshot / UTR
-━━━━━━━━━━━━━━━`
+━━━━━━━━━━━━━━━━━━
+📌 SCAN QR & PAY  
+📩 SEND SCREENSHOT / UTR  
+━━━━━━━━━━━━━━━━━━`
     });
     return;
   }
@@ -101,7 +106,7 @@ bot.on("message", (msg) => {
     if (!requestCount[userId]) requestCount[userId] = 0;
 
     if (requestCount[userId] >= 3) {
-      bot.sendMessage(msg.chat.id, "❌ Limit reached (3 requests only)");
+      bot.sendMessage(msg.chat.id, "❌ LIMIT REACHED (3 TIMES ONLY)");
       return;
     }
 
@@ -118,10 +123,10 @@ bot.on("message", (msg) => {
         caption:
 `📥 PAYMENT REQUEST
 
-👤 User: ${userId}
-💎 Plan: ${planName}
-📸 Screenshot received
-🔁 Attempt: ${requestCount[userId]}/3`,
+👤 USER: ${userId}
+💎 PLAN: ${planName}
+📸 SCREENSHOT RECEIVED
+🔁 ATTEMPT: ${requestCount[userId]}/3`,
         reply_markup: {
           inline_keyboard: [[
             { text: "✅ VERIFY", callback_data: `approve_${userId}` },
@@ -135,10 +140,10 @@ bot.on("message", (msg) => {
       bot.sendMessage(ADMIN_ID,
 `📥 PAYMENT REQUEST
 
-👤 User: ${userId}
-💎 Plan: ${planName}
-📝 Msg: ${msg.text}
-🔁 Attempt: ${requestCount[userId]}/3`,
+👤 USER: ${userId}
+💎 PLAN: ${planName}
+📝 MSG: ${msg.text}
+🔁 ATTEMPT: ${requestCount[userId]}/3`,
       {
         reply_markup: {
           inline_keyboard: [[
@@ -149,11 +154,11 @@ bot.on("message", (msg) => {
       });
     }
 
-    bot.sendMessage(msg.chat.id, "⏳ Waiting for verification...");
+    bot.sendMessage(msg.chat.id, "⏳ WAITING FOR VERIFICATION...");
   }
 });
 
-// 🔘 BUTTON HANDLER
+// 🔘 BUTTON
 bot.on("callback_query", (query) => {
 
   const data = query.data;
@@ -183,13 +188,26 @@ bot.on("callback_query", (query) => {
     bot.sendMessage(userId,
 `✅ PAYMENT VERIFIED
 
-━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━
+
+🔥 COBRA SERVER MOD 🔥
+
+━━━━━━━━━━━━━━━━━━
+
 🔑 KEY:
 \`${key}\`
-📅 EXPIRES: ${expiry.toDateString()}
-━━━━━━━━━━━━━━━
 
-🎉 Enjoy, Have a Nice Day 🚀`,
+📅 EXPIRES:
+${expiry.toDateString()}
+
+━━━━━━━━━━━━━━━━━━
+
+🔗 PAID CHANNEL:
+${CHANNEL_LINK}
+
+━━━━━━━━━━━━━━━━━━
+
+🎉 ENJOY, HAVE A NICE DAY 🚀`,
 { parse_mode: "Markdown" });
 
     if (keys[plan.id].length <= 1) {
@@ -205,17 +223,17 @@ bot.on("callback_query", (query) => {
     bot.sendMessage(userId,
 `❌ PAYMENT REJECTED
 
-⚠️ Send correct payment proof
-Otherwise you may be blocked`);
+⚠️ SEND CORRECT PAYMENT PROOF
+OTHERWISE YOU MAY BE BLOCKED`);
 
-    bot.sendMessage(ADMIN_ID, `❌ Rejected user: ${userId}`);
+    bot.sendMessage(ADMIN_ID, `❌ REJECTED USER: ${userId}`);
   }
 
   // 📦 STOCK
   if (data === "stock") {
-    let msg = "📦 STOCK\n\n";
+    let msg = "📦 STOCK STATUS\n\n";
     for (let p in keys) {
-      msg += `${p} ➜ ${keys[p].length}\n`;
+      msg += `${p.toUpperCase()} ➜ ${keys[p].length}\n`;
     }
     bot.sendMessage(query.message.chat.id, msg);
   }
@@ -245,7 +263,7 @@ Otherwise you may be blocked`);
 `➕ SEND KEYS
 
 Example:
-COBRASERVER>1D-AAAA`);
+COBRASERVER>1D-XXXX`);
   }
 });
 
