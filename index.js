@@ -17,8 +17,9 @@ const app = express();
 app.get("/", (req,res)=>res.send("Running"));
 app.listen(process.env.PORT || 3000);
 
-// 📦 LOAD KEYS
+// 📦 LOAD FILES
 let keys = JSON.parse(fs.readFileSync("keys.json"));
+let data = JSON.parse(fs.readFileSync("data.json")); // NEW
 
 // 💎 PLANS
 const plans = {
@@ -127,7 +128,7 @@ UTR: ${msg.text}`,
     bot.sendMessage(userId,
 `✅ STOCK UPDATED
 
-${selectedPlan[userId]} ➜ ${keys[selectedPlan[userId]].length}`);
+${selectedPlan[userId]}: ${keys[selectedPlan[userId]].length}`);
     selectedPlan[userId]=null;
     return;
   }
@@ -141,12 +142,12 @@ ${selectedPlan[userId]} ➜ ${keys[selectedPlan[userId]].length}`);
 // BUTTONS
 bot.on("callback_query",(query)=>{
 
-  const data = query.data;
+  const dataBtn = query.data;
   const userId = query.from.id;
 
   // PLAN SELECT
-  if(data.startsWith("buy_")){
-    let planId = data.split("_")[1];
+  if(dataBtn.startsWith("buy_")){
+    let planId = dataBtn.split("_")[1];
 
     userPlan[userId] = { ...plans[planId], id: planId };
 
@@ -171,23 +172,22 @@ UPI:
   }
 
   // SCREENSHOT
-  if(data==="screenshot"){
+  if(dataBtn==="screenshot"){
     waitingScreenshot[userId]=true;
     bot.sendMessage(userId,"📸 SEND SCREENSHOT");
   }
 
   // UTR
-  if(data==="enter_utr"){
+  if(dataBtn==="enter_utr"){
     bot.sendMessage(userId,
 `🧾 ENTER YOUR UTR`,
 {reply_markup:{force_reply:true}});
   }
 
   // ✅ VERIFY
-  if(data.startsWith("approve_")){
-    let uid = data.split("_")[1];
+  if(dataBtn.startsWith("approve_")){
+    let uid = dataBtn.split("_")[1];
     let plan = userPlan[uid];
-
     const planId = plan.id;
 
     if (!keys[planId] || keys[planId].length === 0) {
@@ -199,8 +199,20 @@ UPI:
 
     fs.writeFileSync("keys.json",JSON.stringify(keys,null,2));
 
+    let now = new Date();
     let expiry = new Date();
     expiry.setDate(expiry.getDate()+plan.days);
+
+    // 🔥 SAVE DATA
+    data.sold.push({
+      user: uid,
+      key: key,
+      plan: plan.name,
+      date: now.toISOString(),
+      expiry: expiry.toISOString()
+    });
+
+    fs.writeFileSync("data.json", JSON.stringify(data,null,2));
 
     bot.sendMessage(uid,
 `✅ VERIFIED
@@ -221,24 +233,34 @@ UPI:
   }
 
   // ❌ REJECT
-  if(data.startsWith("reject_")){
-    let uid = data.split("_")[1];
+  if(dataBtn.startsWith("reject_")){
+    let uid = dataBtn.split("_")[1];
     bot.sendMessage(uid,"❌ PAYMENT REJECTED\n⚠️ Try Again");
   }
 
-  // 📦 VIEW STOCK (NEW 🔥)
-  if(data==="viewstock"){
-    let msg = "📦 STOCK STATUS\n\n";
+  // 📊 LIVE STOCK PANEL
+  if(dataBtn==="livestock"){
+    let msg = "📊 LIVE STOCK PANEL\n\n";
 
-    for(let p in keys){
-      msg += `${p.toUpperCase()} ➜ ${keys[p].length}\n`;
-    }
+    Object.keys(plans).forEach(p=>{
+      msg += `${plans[p].name}\n`;
+      msg += `🟢 Available: ${keys[p].length}\n\n`;
+    });
+
+    msg += "━━━━━━━━━━━━━━\n📦 LAST SOLD\n\n";
+
+    data.sold.slice(-10).reverse().forEach(s=>{
+      msg += `👤 ${s.user}\n`;
+      msg += `💎 ${s.plan}\n`;
+      msg += `🔑 ${s.key}\n`;
+      msg += `⏳ Exp: ${new Date(s.expiry).toDateString()}\n\n`;
+    });
 
     bot.sendMessage(userId,msg);
   }
 
-  // ➕ ADD STOCK
-  if(data==="addstock"){
+  // ADMIN PANEL
+  if(dataBtn==="addstock"){
     bot.sendMessage(userId,"SELECT PLAN",{
       reply_markup:{
         inline_keyboard:[
@@ -252,21 +274,21 @@ UPI:
     });
   }
 
-  if(data.startsWith("plan")){
-    selectedPlan[userId]=data;
+  if(dataBtn.startsWith("plan")){
+    selectedPlan[userId]=dataBtn;
     bot.sendMessage(userId,"SEND KEYS (ONE PER LINE)");
   }
 });
 
-// ADMIN PANEL
+// ADMIN COMMAND
 bot.onText(/\/admin/, (msg)=>{
   if(msg.from.id!==ADMIN_ID) return;
 
   bot.sendMessage(msg.chat.id,"⚙️ ADMIN PANEL",{
     reply_markup:{
       inline_keyboard:[
-        [{text:"📦 VIEW STOCK",callback_data:"viewstock"}],
-        [{text:"➕ ADD STOCK",callback_data:"addstock"}]
+        [{text:"➕ ADD STOCK",callback_data:"addstock"}],
+        [{text:"📊 LIVE STOCK",callback_data:"livestock"}]
       ]
     }
   });
