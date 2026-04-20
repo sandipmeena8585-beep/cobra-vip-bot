@@ -164,7 +164,7 @@ bot.on("callback_query",(query)=>{
   const dataBtn = query.data;
   const userId = query.from.id;
 
-  // 🔥 FIX 1
+  // 🔥 ONLY CHANGE (IMPORTANT FIX)
   bot.answerCallbackQuery(query.id);
 
   console.log("CLICK:", dataBtn);
@@ -228,13 +228,8 @@ UPI:
     let key = keys[planId].shift();
     fs.writeFileSync("keys.json",JSON.stringify(keys,null,2));
 
-    // 🔥 FIX 2 (HOUR + DAY SUPPORT)
     let expiry = new Date();
-    if(plan.days < 1){
-      expiry.setTime(expiry.getTime() + (plan.days * 24 * 60 * 60 * 1000));
-    } else {
-      expiry.setDate(expiry.getDate()+plan.days);
-    }
+    expiry.setDate(expiry.getDate()+plan.days);
 
     data.sold.push({
       user:uid,
@@ -253,7 +248,7 @@ UPI:
 🔑 KEY:
 \`${key}\`
 
-📅 ${expiry.toString()}
+📅 ${expiry.toDateString()}
 
 🔗 ${CHANNEL_LINK}`,
 {parse_mode:"Markdown"});
