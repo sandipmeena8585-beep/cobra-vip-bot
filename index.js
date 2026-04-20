@@ -2,7 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const express = require("express");
 const fs = require("fs");
 
-const token = process.env.BOT_TOKEN || "8304628992:AAFANNXH6syLC1FIuHxKeYd8MIyaWXNTXg4";
+const token = process.env.BOT_TOKEN || "8304628992:AAE0fBI3L_h8tGq3OtyNXgyJwmBfCWNczG8";
 const ADMIN_ID = 7707237527;
 
 const QR_LINK = "https://images.weserv.nl/?url=raw.githubusercontent.com/sandipmeena8585-beep/cobra-bot/main/upi_qr.png&w=220&h=220";
