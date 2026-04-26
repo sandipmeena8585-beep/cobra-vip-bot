@@ -28,6 +28,12 @@ function loadJSON(file, def){
   }
 }
 
+// SAFE SAVE
+function saveJSON(file, data){
+  fs.writeFileSync(file, JSON.stringify(data,null,2));
+}
+
+// LOAD DATA
 let keys = loadJSON("keys.json",{
   plan1:[], plan2:[], plan3:[], plan4:[], plan5:[]
 });
@@ -78,12 +84,12 @@ bot.on("message",(msg)=>{
 
   // SCREENSHOT
   if(waitingScreenshot[userId] && msg.photo){
-    if(!userPlan[userId]){
+
+    let plan = userPlan[userId];
+    if(!plan){
       bot.sendMessage(userId,"⚠️ Select plan again");
       return;
     }
-
-    let plan = userPlan[userId];
 
     bot.sendPhoto(ADMIN_ID, msg.photo[msg.photo.length-1].file_id,{
       caption:`📸 PAYMENT PROOF\nUSER: ${userId}\nPLAN: ${plan.name}`,
@@ -102,12 +108,11 @@ bot.on("message",(msg)=>{
 
   // UTR
   if(msg.reply_to_message && msg.reply_to_message.text.includes("ENTER YOUR UTR")){
-    if(!userPlan[userId]){
+    let plan = userPlan[userId];
+    if(!plan){
       bot.sendMessage(userId,"⚠️ Select plan again");
       return;
     }
-
-    let plan = userPlan[userId];
 
     bot.sendMessage(ADMIN_ID,
 `📥 PAYMENT REQUEST
@@ -137,7 +142,7 @@ UTR: ${msg.text}`,
       }
     });
 
-    fs.writeFileSync("keys.json",JSON.stringify(keys,null,2));
+    saveJSON("keys.json",keys);
 
     bot.sendMessage(userId,
 `✅ STOCK UPDATED
@@ -159,19 +164,8 @@ bot.on("callback_query",(query)=>{
 
   bot.answerCallbackQuery(query.id);
 
-  // BUY PLAN
+  // BUY
   if(dataBtn.startsWith("buy_")){
-
-    // 🔥 ONLY CHANGE (FIX)
-    if(userPlan[userId] && !waitingScreenshot[userId]){
-      delete userPlan[userId];
-    }
-
-    if(userPlan[userId]){
-      bot.answerCallbackQuery(query.id,{text:"⚠️ Complete previous payment"});
-      return;
-    }
-
     let planId = dataBtn.split("_")[1];
     userPlan[userId] = { ...plans[planId], id: planId };
 
@@ -197,24 +191,31 @@ UPI:
     });
   }
 
-  // SCREENSHOT
+  // SCREENSHOT BTN
   if(dataBtn==="screenshot"){
     waitingScreenshot[userId]=true;
     bot.sendMessage(userId,"📸 SEND SCREENSHOT");
   }
 
-  // UTR
+  // UTR BTN
   if(dataBtn==="enter_utr"){
     bot.sendMessage(userId,"🧾 ENTER YOUR UTR",{reply_markup:{force_reply:true}});
   }
 
   // APPROVE
   if(dataBtn.startsWith("approve_")){
+
+    // 🔥 hide buttons
+    bot.editMessageReplyMarkup({inline_keyboard:[]},{
+      chat_id: query.message.chat.id,
+      message_id: query.message.message_id
+    });
+
     let uid = dataBtn.split("_")[1];
     let plan = userPlan[uid];
     if(!plan) return;
 
-    const planId = plan.id;
+    let planId = plan.id;
 
     if(!keys[planId] || keys[planId].length===0){
       bot.sendMessage(ADMIN_ID,"❌ STOCK EMPTY");
@@ -222,7 +223,7 @@ UPI:
     }
 
     let key = keys[planId].shift();
-    fs.writeFileSync("keys.json",JSON.stringify(keys,null,2));
+    saveJSON("keys.json",keys);
 
     let expiry = new Date();
     expiry.setDate(expiry.getDate()+plan.days);
@@ -234,7 +235,7 @@ UPI:
       expiry:expiry.toISOString()
     });
 
-    fs.writeFileSync("data.json",JSON.stringify(data,null,2));
+    saveJSON("data.json",data);
 
     delete userPlan[uid];
 
@@ -252,23 +253,20 @@ UPI:
 
   // REJECT
   if(dataBtn.startsWith("reject_")){
+
+    // 🔥 hide buttons
+    bot.editMessageReplyMarkup({inline_keyboard:[]},{
+      chat_id: query.message.chat.id,
+      message_id: query.message.message_id
+    });
+
     let uid = dataBtn.split("_")[1];
     delete userPlan[uid];
+
     bot.sendMessage(uid,"❌ PAYMENT REJECTED");
   }
 
-  // LIVE STOCK
-  if(dataBtn==="livestock"){
-    let msg = "📊 LIVE STOCK\n\n";
-
-    Object.keys(plans).forEach(p=>{
-      msg += `${plans[p].name}\n🟢 ${keys[p].length}\n\n`;
-    });
-
-    bot.sendMessage(userId,msg);
-  }
-
-  // ADD STOCK BUTTON
+  // ADMIN
   if(dataBtn==="addstock"){
     bot.sendMessage(userId,"SELECT PLAN",{
       reply_markup:{
@@ -283,11 +281,11 @@ UPI:
     });
   }
 
-  // PLAN SELECT
   if(dataBtn.startsWith("plan")){
     selectedPlan[userId]=dataBtn;
     bot.sendMessage(userId,"SEND KEYS (ONE PER LINE)");
   }
+
 });
 
 // ADMIN PANEL
@@ -297,8 +295,7 @@ bot.onText(/\/admin/, (msg)=>{
   bot.sendMessage(msg.chat.id,"⚙️ ADMIN PANEL",{
     reply_markup:{
       inline_keyboard:[
-        [{text:"➕ ADD STOCK",callback_data:"addstock"}],
-        [{text:"📊 LIVE STOCK",callback_data:"livestock"}]
+        [{text:"➕ ADD STOCK",callback_data:"addstock"}]
       ]
     }
   });
