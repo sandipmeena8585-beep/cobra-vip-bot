@@ -5,7 +5,7 @@ const fs = require("fs");
 const token = process.env.BOT_TOKEN || "8304628992:AAF2gzdL33mdIkBuoVMUQUbzTOQZEeUvoqI";
 const ADMIN_ID = 7707237527;
 
-// ✅ UPDATED CHANNEL
+// ✅ UPDATED
 const CHANNEL_LINK = "https://t.me/+EjfiC_Zsw3liYmI9";
 
 const QR_LINK = "https://images.weserv.nl/?url=raw.githubusercontent.com/sandipmeena8585-beep/cobra-bot/main/upi_qr.png&w=220&h=220";
@@ -19,7 +19,7 @@ const app = express();
 app.get("/", (req,res)=>res.send("RUNNING"));
 app.listen(process.env.PORT || 3000);
 
-// FILE SYSTEM
+// FILE SYSTEM SAFE
 function loadJSON(file, def){
   try{
     return JSON.parse(fs.readFileSync(file));
@@ -47,7 +47,7 @@ const plans = {
 
 let userPlan={}, selectedPlan={}, waitingScreenshot={};
 
-// 🔒 ADMIN STOCK
+// ADMIN STOCK
 function getStockText(){
   return `📦 LIVE STOCK
 
@@ -58,7 +58,7 @@ function getStockText(){
 60 DAY : ${keys.plan5.length}`;
 }
 
-// 📊 REPORT
+// REPORT
 function getFullReport(){
   let text = `📊 FULL REPORT
 
@@ -74,6 +74,7 @@ ${getStockText()}
   let last = data.sold.slice(-10).reverse();
   last.forEach(s=>{
     text += `
+
 👤 ${s.user}
 🔑 ${s.key}
 📦 ${s.plan}
@@ -84,16 +85,16 @@ ${getStockText()}
   return text;
 }
 
-// 🏠 HOME PANEL
+// HOME UI
 function showHome(chatId){
   bot.sendMessage(chatId,
 `🏠 𝗖𝗢𝗕𝗥𝗔 𝗔𝗣𝗣
 
 ━━━━━━━━━━━━━━
-💎 𝐏𝐑𝐄𝐌𝐈𝐔𝐌 𝐀𝐂𝐂𝐄𝐒𝐒 𝐏𝐀𝐍𝐄𝐋
+💎 𝐏𝐑𝐄𝐌𝐈𝐔𝐌 𝐀𝐂𝐂𝐄𝐒𝐒
 ━━━━━━━━━━━━━━
 
-👇 𝐒𝐄𝐋𝐄𝐂𝐓 𝐎𝐏𝐓𝐈𝐎𝐍`,
+👇 SELECT OPTION`,
 {
   reply_markup:{
     inline_keyboard:[
@@ -112,7 +113,7 @@ function showHome(chatId){
 // START
 bot.onText(/\/start/,msg=>showHome(msg.chat.id));
 
-// 🔥 ANY MESSAGE → HOME
+// MESSAGE HANDLER
 bot.on("message",msg=>{
   let id = msg.from.id;
 
@@ -121,7 +122,7 @@ bot.on("message",msg=>{
     let plan=userPlan[id];
     if(!plan) return showHome(id);
 
-    bot.sendPhoto(ADMIN_ID,msg.photo.pop().file_id,{
+    bot.sendPhoto(ADMIN_ID,msg.photo[msg.photo.length-1].file_id,{
       caption:`📸 PAYMENT\nUSER:${id}\nPLAN:${plan.name}`,
       reply_markup:{
         inline_keyboard:[[
@@ -175,8 +176,8 @@ UTR:${msg.text}`,
     return;
   }
 
-  // DEFAULT → HOME
-  if(msg.text && !msg.text.startsWith("/")){
+  // RANDOM MSG → HOME (SAFE)
+  if(msg.text && !msg.text.startsWith("/") && !msg.reply_to_message){
     showHome(msg.chat.id);
   }
 });
@@ -188,9 +189,9 @@ bot.on("callback_query",q=>{
 
   if(d==="app_home") return showHome(id);
 
-  // BUY PANEL
+  // BUY
   if(d==="app_buy"){
-    return bot.sendMessage(id,`🛒 SELECT PLAN`,{
+    return bot.sendMessage(id,"🛒 SELECT PLAN",{
       reply_markup:{
         inline_keyboard:[
           ...Object.keys(plans).map(p=>[
@@ -202,17 +203,15 @@ bot.on("callback_query",q=>{
     });
   }
 
-  // INFO PANEL
+  // INFO
   if(d==="app_info"){
     return bot.sendMessage(id,
-`📊 𝗜𝗡𝗙𝗢 𝗣𝗔𝗡𝗘𝗟
+`📊 INFO
 
-💎 𝐅𝐔𝐋𝐋 𝐓𝐑𝐔𝐒𝐓 😎
-🚫 𝐍𝐎 𝐒𝐂𝐀𝐌 ❌
-⚡ 𝐅𝐀𝐒𝐓 𝐃𝐄𝐋𝐈𝐕𝐄𝐑𝐘
-🔐 𝐒𝐀𝐅𝐄 & 𝐒𝐄𝐂𝐔𝐑𝐄 𝐒𝐘𝐒𝐓𝐄𝐌
-
-𝙹𝚘𝚒𝚗 𝚌𝚑𝚊𝚗𝚗𝚎𝚕 👇`,
+💎 FULL TRUST 😎
+🚫 NO SCAM ❌
+⚡ FAST DELIVERY
+🔐 SAFE SYSTEM`,
 {
       reply_markup:{
         inline_keyboard:[
@@ -223,18 +222,15 @@ bot.on("callback_query",q=>{
     });
   }
 
-  // HELP PANEL
+  // HELP
   if(d==="app_help"){
     return bot.sendMessage(id,
-`⚙️ HELP CENTER
+`⚙️ HELP
 
 1. Select plan
-2. Pay via UPI
-3. Send screenshot / UTR
-4. Get key
-
-━━━━━━━━━━━━━━
-👤 CONTACT: @GODx_COBRA`,
+2. Pay UPI
+3. Send proof
+4. Get key`,
 {
       reply_markup:{
         inline_keyboard:[
@@ -295,9 +291,7 @@ UPI:
     let expiry=new Date();
     expiry.setDate(expiry.getDate()+plan.days);
 
-    data.sold.push({
-      user:uid,key,plan:plan.name,expiry:expiry.toISOString()
-    });
+    data.sold.push({user:uid,key,plan:plan.name,expiry:expiry.toISOString()});
     saveJSON("data.json",data);
 
     bot.sendMessage(ADMIN_ID,
