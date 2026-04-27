@@ -6,24 +6,26 @@ const mongoose = require("mongoose");
 const token = process.env.BOT_TOKEN || "8304628992:AAFHjdhzF33fiH2QHjQScU9lK2zgqAx7nIc";
 const MONGO_URL = process.env.MONGO_URL || "mongodb+srv://COBRA:Cobra%4012345@cluster0.uqwcyny.mongodb.net/cobra?retryWrites=true&w=majority";
 const ADMIN_ID = 7707237527;
+const BOT_USERNAME = "GODx_cobraBOT";
 
 const CHANNEL_LINK = "https://t.me/+wRZN39fdVcRkYTM9";
 const QR_LINK = "https://images.weserv.nl/?url=raw.githubusercontent.com/sandipmeena8585-beep/cobra-bot/main/upi_qr.png&w=220&h=220";
 const UPI_ID = "godxcobra@axl";
-const PAYMENT_NAME = "SANDIP MEENA";
 
 // ===== SERVER =====
 const app = express();
 app.use(express.json());
-
-app.get("/", (req,res)=>res.send("COBRA BOT RUNNING ✅"));
+app.get("/", (req,res)=>res.sendStatus(404));
 app.listen(process.env.PORT || 3000);
 
 // ===== BOT =====
 const bot = new TelegramBot(token);
 const URL = process.env.RENDER_EXTERNAL_URL;
 
-bot.setWebHook(`${URL}/bot${token}`);
+(async () => {
+  await bot.deleteWebHook();
+  await bot.setWebHook(`${URL}/bot${token}`);
+})();
 
 app.post(`/bot${token}`, (req,res)=>{
   bot.processUpdate(req.body);
@@ -31,9 +33,7 @@ app.post(`/bot${token}`, (req,res)=>{
 });
 
 // ===== DB =====
-mongoose.connect(MONGO_URL)
-.then(()=>console.log("MongoDB Connected ✅"))
-.catch(err=>console.log("Mongo Error ❌",err));
+mongoose.connect(MONGO_URL);
 
 // ===== MODELS =====
 const Key = mongoose.model("Key",{plan:String,key:String});
@@ -47,29 +47,44 @@ const Sale = mongoose.model("Sale",{
   createdAt:{type:Date,default:Date.now}
 });
 
-const User = mongoose.model("User",{id:Number});
-const Log = mongoose.model("Log",{text:String,date:{type:Date,default:Date.now}});
+const User = mongoose.model("User",{
+  id:Number,
+  refBy:Number,
+  balance:{type:Number,default:0},
+  referrals:{type:Number,default:0},
+  refRewarded:{type:Boolean,default:false},
+  rejects:{type:Number,default:0},
+  flagged:{type:Boolean,default:false}
+});
 
 // ===== PLANS =====
 const plans = {
-  plan1:{name:"🗝️ 1 DAY - 100₹",days:1},
-  plan2:{name:"🗝️ 7 DAY - 400₹",days:7},
-  plan3:{name:"🗝️ 15 DAY - 700₹",days:15},
-  plan4:{name:"🗝️ 30 DAY - 900₹",days:30},
-  plan5:{name:"🗝️ 60 DAY - 1200₹",days:60}
+  plan1:{name:"1 DAY - 100₹",days:1},
+  plan2:{name:"7 DAY - 400₹",days:7},
+  plan3:{name:"15 DAY - 700₹",days:15},
+  plan4:{name:"30 DAY - 900₹",days:30},
+  plan5:{name:"60 DAY - 1200₹",days:60}
 };
 
-let userPlan={}, waitingScreenshot={}, selectedPlan={}, userUTR={};
+// ===== REFERRAL =====
+const referralRewards = {
+  plan1:10,
+  plan2:50,
+  plan3:80,
+  plan4:100,
+  plan5:200
+};
+
+let userPlan={}, waitingScreenshot={}, userUTR={};
 
 // ===== HOME =====
 function home(id){
-  bot.sendMessage(id,
-`🏠 *COBRA PANEL*`,
-  {
-    parse_mode:"Markdown",
+  bot.sendMessage(id,"🏠 COBRA PANEL",{
     reply_markup:{
       inline_keyboard:[
         [{text:"🛒 BUY",callback_data:"buy"}],
+        [{text:"👤 ACCOUNT",callback_data:"account"}],
+        [{text:"🎁 REFER",callback_data:"refer"}],
         [{text:"📊 INFO",callback_data:"info"}],
         [{text:"⚙️ HELP",callback_data:"help"}]
       ]
@@ -77,30 +92,20 @@ function home(id){
   });
 }
 
-// ===== STOCK =====
-async function getStock(){
-  return `📦 LIVE STOCK
-
-1 DAY  : ${await Key.countDocuments({plan:"plan1"})}
-7 DAY  : ${await Key.countDocuments({plan:"plan2"})}
-15 DAY : ${await Key.countDocuments({plan:"plan3"})}
-30 DAY : ${await Key.countDocuments({plan:"plan4"})}
-60 DAY : ${await Key.countDocuments({plan:"plan5"})}`;
-}
-
-// ===== REPORT =====
-async function getReport(){
-  const today = new Date(); today.setHours(0,0,0,0);
-  const month = new Date(); month.setDate(1);
-
-  return `📊 REPORT
-
-TODAY: ${await Sale.countDocuments({createdAt:{$gte:today}})}
-MONTH: ${await Sale.countDocuments({createdAt:{$gte:month}})}
-TOTAL: ${await Sale.countDocuments()}`;
-}
-
 // ===== START =====
+bot.onText(/\/start (.+)/, async (msg,match)=>{
+  let id = msg.from.id;
+  let ref = parseInt(match[1]);
+
+  if(ref && ref !== id){
+    let exist = await User.findOne({id});
+    if(!exist){
+      await User.create({id,refBy:ref});
+    }
+  }
+  home(id);
+});
+
 bot.onText(/\/start/, async msg=>{
   let id = msg.from.id;
   await User.updateOne({id},{id},{upsert:true});
@@ -108,70 +113,13 @@ bot.onText(/\/start/, async msg=>{
 });
 
 // ===== MESSAGE =====
-bot.on("message", async msg=>{
+bot.on("message", msg=>{
   let id = msg.from.id;
 
-  // RANDOM FIX
-  if(msg.text && !msg.text.startsWith("/")){
-    return home(id);
-  }
+  if(msg.text && msg.text.startsWith("/")) return;
+  if(userPlan[id] || waitingScreenshot[id]) return;
 
-  // UTR
-  if(msg.reply_to_message?.text?.includes("ENTER UTR")){
-    if(!userPlan[id]) return;
-
-    userUTR[id]=msg.text;
-
-    await Log.create({text:`UTR ${id}`});
-
-    bot.sendMessage(ADMIN_ID,
-`USER: ${id}
-PLAN: ${userPlan[id].name}
-UTR: ${msg.text}`,{
-      reply_markup:{
-        inline_keyboard:[[
-          {text:"✅ VERIFY",callback_data:`approve_${id}`},
-          {text:"❌ REJECT",callback_data:`reject_${id}`}
-        ]]
-      }
-    });
-
-    return bot.sendMessage(id,"⏳ WAIT ADMIN");
-  }
-
-  // SCREENSHOT
-  if(waitingScreenshot[id] && msg.photo){
-    if(!userPlan[id]) return;
-
-    await Log.create({text:`SCREENSHOT ${id}`});
-
-    bot.sendPhoto(ADMIN_ID,msg.photo.pop().file_id,{
-      caption:`USER: ${id}\nPLAN: ${userPlan[id].name}`,
-      reply_markup:{
-        inline_keyboard:[[
-          {text:"✅ VERIFY",callback_data:`approve_${id}`},
-          {text:"❌ REJECT",callback_data:`reject_${id}`}
-        ]]
-      }
-    });
-
-    waitingScreenshot[id]=false;
-    return bot.sendMessage(id,"⏳ WAIT ADMIN");
-  }
-
-  // ADD STOCK
-  if(selectedPlan[id]){
-    for(let k of msg.text.split("\n")){
-      if(k.trim()){
-        await Key.create({plan:selectedPlan[id],key:k.trim()});
-      }
-    }
-    selectedPlan[id]=null;
-
-    await Log.create({text:`STOCK ADDED ${id}`});
-
-    return bot.sendMessage(id,"✅ STOCK ADDED\n\n"+await getStock());
-  }
+  home(id);
 });
 
 // ===== BUTTON =====
@@ -179,8 +127,9 @@ bot.on("callback_query", async q=>{
   let d=q.data,id=q.from.id;
   bot.answerCallbackQuery(q.id);
 
+  // BUY
   if(d==="buy"){
-    return bot.sendMessage(id,"💰 SELECT PLAN",{
+    return bot.sendMessage(id,"SELECT PLAN",{
       reply_markup:{
         inline_keyboard:Object.keys(plans).map(p=>[
           {text:plans[p].name,callback_data:`buy_${p}`}
@@ -189,49 +138,58 @@ bot.on("callback_query", async q=>{
     });
   }
 
-  // ❌ STOCK HIDE FROM USER
+  // ACCOUNT
+  if(d==="account"){
+    let active = await Sale.findOne({user:id,expiry:{$gt:new Date()}});
+    let u = await User.findOne({id});
+
+    return bot.sendMessage(id,
+`👤 ACCOUNT
+
+${active ? `🔑 ${active.key}\n📦 ${active.plan}` : "❌ NO PLAN"}
+
+💰 BALANCE: ₹${u?.balance || 0}`);
+  }
+
+  // REFER
+  if(d==="refer"){
+    return bot.sendMessage(id,
+`🎁 LINK:
+https://t.me/${BOT_USERNAME}?start=${id}
+
+💰 EARN:
+1D=10₹ | 7D=50₹ | 15D=80₹`);
+  }
+
+  // INFO
   if(d==="info"){
     return bot.sendMessage(id,
-`📊 *COBRA INFO*
-
-🔥 Trusted Seller  
-⚡ Instant Delivery  
-🛡️ Safe & Secure  
-🎯 Legit Keys Only  
-
-💎 Premium Quality Service`,
-{parse_mode:"Markdown"});
+`🔥 TRUST SELLER
+⚡ FAST DELIVERY
+🛡️ SAFE SYSTEM`);
   }
 
+  // HELP
   if(d==="help"){
     return bot.sendMessage(id,
-`⚙️ *HELP & SUPPORT*
+`⚙️ HELP
 
-💬 Payment issue  
-💬 Key not received  
-💬 Any problem  
+Payment issue / key issue
 
-Team always active ✅  
-
-📩 DM 👉 @GODx_COBRA`,
-{parse_mode:"Markdown"});
+DM 👉 @GODx_COBRA`);
   }
 
+  // BUY FLOW
   if(d.startsWith("buy_")){
     let p=d.split("_")[1];
     userPlan[id]={...plans[p],id:p};
 
     return bot.sendPhoto(id,QR_LINK,{
-      caption:`💰 PAYMENT
-
-👤 ${PAYMENT_NAME}
-📦 ${plans[p].name}
-
-💳 UPI: ${UPI_ID}`,
+      caption:`PAY: ${UPI_ID}`,
       reply_markup:{
         inline_keyboard:[
-          [{text:"📸 SCREENSHOT",callback_data:"ss"}],
-          [{text:"💳 ENTER UTR",callback_data:"utr"}]
+          [{text:"📸 SS",callback_data:"ss"}],
+          [{text:"💳 UTR",callback_data:"utr"}]
         ]
       }
     });
@@ -239,105 +197,48 @@ Team always active ✅
 
   if(d==="ss"){
     waitingScreenshot[id]=true;
-    return bot.sendMessage(id,"SEND SCREENSHOT");
+    return bot.sendMessage(id,"SEND SS");
   }
 
   if(d==="utr"){
     return bot.sendMessage(id,"ENTER UTR",{reply_markup:{force_reply:true}});
   }
 
-  // ===== APPROVE =====
+  // APPROVE
   if(d.startsWith("approve_")){
-    await bot.editMessageReplyMarkup({inline_keyboard:[]},{
-      chat_id:q.message.chat.id,message_id:q.message.message_id
-    });
-
     let uid=d.split("_")[1];
 
-    // ONE USER ONE KEY
-    let active=await Sale.findOne({user:uid,expiry:{$gt:new Date()}});
-    if(active) return bot.sendMessage(uid,"❌ ACTIVE PLAN EXISTS");
-
     let keyData=await Key.findOneAndDelete({plan:userPlan[uid].id});
-    if(!keyData) return bot.sendMessage(ADMIN_ID,"❌ STOCK EMPTY");
+    if(!keyData) return;
 
     let exp=new Date();
     exp.setDate(exp.getDate()+userPlan[uid].days);
 
-    await Sale.create({
-      user:uid,
-      key:keyData.key,
-      plan:userPlan[uid].name,
-      expiry:exp,
-      utr:userUTR[uid]||"N/A"
-    });
+    await Sale.create({user:uid,key:keyData.key,plan:userPlan[uid].name,expiry:exp});
 
-    await Log.create({text:`APPROVED ${uid}`});
+    // REFERRAL
+    let userData = await User.findOne({id:uid});
 
-    bot.sendMessage(uid,
-`✅ VERIFIED
+    if(userData?.refBy && !userData.refRewarded){
+      let reward = referralRewards[userPlan[uid].id] || 0;
 
-🔑 KEY:
-${keyData.key}
-
-🎮 LIMIT:
-10-12 KILLS SAFE PLAY
-
-📅 EXPIRY:
-${exp.toLocaleString()}`,
-{
-      reply_markup:{
-        inline_keyboard:[
-          [{text:"📦 JOIN CHANNEL",url:CHANNEL_LINK}]
-        ]
+      if(reward>0){
+        await User.updateOne({id:userData.refBy},{$inc:{balance:reward,referrals:1}});
+        await User.updateOne({id:uid},{$set:{refRewarded:true}});
       }
-    });
-
-    // LOW STOCK ALERT
-    let left=await Key.countDocuments({plan:userPlan[uid].id});
-    if(left<=2){
-      bot.sendMessage(ADMIN_ID,`⚠️ LOW STOCK ${userPlan[uid].name}`);
     }
 
-    delete userPlan[uid];
-    delete userUTR[uid];
+    bot.sendMessage(uid,`KEY: ${keyData.key}`);
   }
 
-  // ===== REJECT =====
-  if(d.startsWith("reject_")){
-    await bot.editMessageReplyMarkup({inline_keyboard:[]},{
-      chat_id:q.message.chat.id,message_id:q.message.message_id
-    });
+  // ADMIN
+  if(d==="stats"){
+    if(id!==ADMIN_ID) return;
 
-    let uid=d.split("_")[1];
+    let users=await User.countDocuments();
+    let sales=await Sale.countDocuments();
 
-    await Log.create({text:`REJECT ${uid}`});
-
-    bot.sendMessage(uid,"❌ PAYMENT REJECTED");
-    delete userPlan[uid];
-  }
-
-  if(d==="addstock"){
-    return bot.sendMessage(id,"SELECT PLAN",{
-      reply_markup:{
-        inline_keyboard:[
-          [{text:"1 DAY",callback_data:"plan1"}],
-          [{text:"7 DAY",callback_data:"plan2"}],
-          [{text:"15 DAY",callback_data:"plan3"}],
-          [{text:"30 DAY",callback_data:"plan4"}],
-          [{text:"60 DAY",callback_data:"plan5"}]
-        ]
-      }
-    });
-  }
-
-  if(d==="report"){
-    return bot.sendMessage(id,await getReport());
-  }
-
-  if(d.startsWith("plan")){
-    selectedPlan[id]=d;
-    return bot.sendMessage(id,"SEND KEYS");
+    bot.sendMessage(id,`USERS:${users}\nSALES:${sales}`);
   }
 });
 
@@ -345,24 +246,11 @@ ${exp.toLocaleString()}`,
 bot.onText(/\/admin/,msg=>{
   if(msg.from.id!==ADMIN_ID) return;
 
-  bot.sendMessage(msg.chat.id,"⚙️ ADMIN PANEL",{
+  bot.sendMessage(msg.chat.id,"ADMIN",{
     reply_markup:{
       inline_keyboard:[
-        [{text:"➕ ADD STOCK",callback_data:"addstock"}],
-        [{text:"📊 REPORT",callback_data:"report"}]
+        [{text:"📊 STATS",callback_data:"stats"}]
       ]
     }
   });
-});
-
-// ===== BROADCAST =====
-bot.onText(/\/broadcast (.+)/, async (msg,match)=>{
-  if(msg.from.id!==ADMIN_ID) return;
-
-  let users=await User.find();
-  for(let u of users){
-    bot.sendMessage(u.id,match[1]).catch(()=>{});
-  }
-
-  bot.sendMessage(msg.chat.id,"✅ SENT");
 });
