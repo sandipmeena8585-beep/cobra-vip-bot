@@ -2,22 +2,11 @@ const TelegramBot = require('node-telegram-bot-api');
 const express = require("express");
 const mongoose = require("mongoose");
 
-// ===== ENV (Render me set karna) =====
-const token = mongodb+srv://sandipmeena8585_db_user:Tck2CfHfuw2Odb2k@cluster0.uqwcyyn.mongodb.net/?appName=Cluster0;
-const MONGO_URL = 8304628992:AAF2gzdL33mdIkBuoVMUQUbzTOQZEeUvoqI;
+// ===== CONFIG (CORRECT) =====
+const token = "8304628992:AAF2gzdL33mdIkBuoVMUQUbzTOQZEeUvoqI";
+const MONGO_URL = "mongodb+srv://sandipmeena8585_db_user:Tck2CfHfuw2Odb2k@cluster0.uqwcyyn.mongodb.net/cobra?retryWrites=true&w=majority";
 const ADMIN_ID = 7707237527;
 
-// ===== CHECK =====
-if (!token) {
-  console.log("❌ BOT_TOKEN missing");
-  process.exit(1);
-}
-if (!MONGO_URL) {
-  console.log("❌ MONGO_URL missing");
-  process.exit(1);
-}
-
-// ===== CONFIG =====
 const CHANNEL_LINK = "https://t.me/+wRZN39fdVcRkYTM9";
 const QR_LINK = "https://images.weserv.nl/?url=raw.githubusercontent.com/sandipmeena8585-beep/cobra-bot/main/upi_qr.png&w=220&h=220";
 const UPI_ID = "godxcobra@axl";
@@ -47,7 +36,6 @@ const plans = {
   plan5:{name:"🗝️ 60 DAY - 1200₹",days:60}
 };
 
-// ===== GLOBAL =====
 let userPlan={}, waitingScreenshot={}, selectedPlan={}, userUTR={};
 
 // ===== STOCK =====
@@ -90,9 +78,9 @@ mongoose.connect(MONGO_URL,{
   bot.on("message",async msg=>{
     let id = msg.from.id;
 
-    // UTR
     if(msg.reply_to_message?.text?.includes("ENTER UTR")){
       if(!userPlan[id]) return;
+
       userUTR[id]=msg.text;
 
       bot.sendMessage(ADMIN_ID,
@@ -110,7 +98,6 @@ UTR:${msg.text}`,{
       return bot.sendMessage(id,"WAIT ADMIN");
     }
 
-    // SCREENSHOT
     if(waitingScreenshot[id] && msg.photo){
       if(!userPlan[id]) return;
 
@@ -128,7 +115,6 @@ UTR:${msg.text}`,{
       return bot.sendMessage(id,"WAIT ADMIN");
     }
 
-    // ADD STOCK
     if(selectedPlan[id]){
       for(let k of msg.text.split("\n")){
         if(k.trim()){
@@ -195,7 +181,6 @@ ${plans[p].name}`,
       return bot.sendMessage(id,"ENTER UTR",{reply_markup:{force_reply:true}});
     }
 
-    // APPROVE
     if(d.startsWith("approve_")){
       await bot.editMessageReplyMarkup({inline_keyboard:[]},{
         chat_id:q.message.chat.id,
@@ -222,7 +207,6 @@ ${plans[p].name}`,
       delete userUTR[uid];
     }
 
-    // REJECT
     if(d.startsWith("reject_")){
       await bot.editMessageReplyMarkup({inline_keyboard:[]},{
         chat_id:q.message.chat.id,
@@ -254,7 +238,6 @@ ${plans[p].name}`,
     }
   });
 
-  // ===== ADMIN =====
   bot.onText(/\/admin/,msg=>{
     if(msg.from.id!==ADMIN_ID) return;
 
@@ -268,6 +251,4 @@ ${plans[p].name}`,
   });
 
 })
-.catch(err=>{
-  console.log("❌ Mongo Error:",err);
-});
+.catch(err=>console.log("Mongo Error ❌",err));
