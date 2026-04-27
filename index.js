@@ -5,7 +5,6 @@ const fs = require("fs");
 const token = process.env.BOT_TOKEN || "8304628992:AAF2gzdL33mdIkBuoVMUQUbzTOQZEeUvoqI";
 const ADMIN_ID = 7707237527;
 
-// ✅ UPDATED
 const CHANNEL_LINK = "https://t.me/+EjfiC_Zsw3liYmI9";
 
 const QR_LINK = "https://images.weserv.nl/?url=raw.githubusercontent.com/sandipmeena8585-beep/cobra-bot/main/upi_qr.png&w=220&h=220";
@@ -19,7 +18,7 @@ const app = express();
 app.get("/", (req,res)=>res.send("RUNNING"));
 app.listen(process.env.PORT || 3000);
 
-// FILE SYSTEM SAFE
+// FILE SYSTEM
 function loadJSON(file, def){
   try{
     return JSON.parse(fs.readFileSync(file));
@@ -47,7 +46,7 @@ const plans = {
 
 let userPlan={}, selectedPlan={}, waitingScreenshot={};
 
-// ADMIN STOCK
+// STOCK
 function getStockText(){
   return `📦 LIVE STOCK
 
@@ -85,13 +84,13 @@ ${getStockText()}
   return text;
 }
 
-// HOME UI
+// HOME
 function showHome(chatId){
   bot.sendMessage(chatId,
 `🏠 𝗖𝗢𝗕𝗥𝗔 𝗔𝗣𝗣
 
 ━━━━━━━━━━━━━━
-💎 𝐏𝐑𝐄𝐌𝐈𝐔𝐌 𝐀𝐂𝐂𝐄𝐒𝐒
+💎 PREMIUM ACCESS
 ━━━━━━━━━━━━━━
 
 👇 SELECT OPTION`,
@@ -110,14 +109,12 @@ function showHome(chatId){
 });
 }
 
-// START
 bot.onText(/\/start/,msg=>showHome(msg.chat.id));
 
-// MESSAGE HANDLER
+// MESSAGE
 bot.on("message",msg=>{
   let id = msg.from.id;
 
-  // SCREENSHOT
   if(waitingScreenshot[id] && msg.photo){
     let plan=userPlan[id];
     if(!plan) return showHome(id);
@@ -137,7 +134,6 @@ bot.on("message",msg=>{
     return;
   }
 
-  // UTR
   if(msg.reply_to_message && msg.reply_to_message.text.includes("ENTER YOUR UTR")){
     let plan=userPlan[id];
     if(!plan) return showHome(id);
@@ -161,7 +157,6 @@ UTR:${msg.text}`,
     return;
   }
 
-  // ADD STOCK
   if(selectedPlan[id]){
     msg.text.split("\n").forEach(k=>{
       if(k.trim()) keys[selectedPlan[id]].push(k.trim());
@@ -176,7 +171,6 @@ UTR:${msg.text}`,
     return;
   }
 
-  // RANDOM MSG → HOME (SAFE)
   if(msg.text && !msg.text.startsWith("/") && !msg.reply_to_message){
     showHome(msg.chat.id);
   }
@@ -189,7 +183,6 @@ bot.on("callback_query",q=>{
 
   if(d==="app_home") return showHome(id);
 
-  // BUY
   if(d==="app_buy"){
     return bot.sendMessage(id,"🛒 SELECT PLAN",{
       reply_markup:{
@@ -203,7 +196,6 @@ bot.on("callback_query",q=>{
     });
   }
 
-  // INFO
   if(d==="app_info"){
     return bot.sendMessage(id,
 `📊 INFO
@@ -222,7 +214,6 @@ bot.on("callback_query",q=>{
     });
   }
 
-  // HELP
   if(d==="app_help"){
     return bot.sendMessage(id,
 `⚙️ HELP
@@ -241,7 +232,6 @@ bot.on("callback_query",q=>{
     });
   }
 
-  // BUY FLOW
   if(d.startsWith("buy_")){
     let p=d.split("_")[1];
     userPlan[id]={...plans[p],id:p};
@@ -273,7 +263,7 @@ UPI:
     bot.sendMessage(id,"ENTER YOUR UTR",{reply_markup:{force_reply:true}});
   }
 
-  // APPROVE
+  // ✅ UPDATED POPUP HERE
   if(d.startsWith("approve_")){
     bot.editMessageReplyMarkup({inline_keyboard:[]},{
       chat_id:q.message.chat.id,message_id:q.message.message_id
@@ -303,18 +293,36 @@ KEY:${key}
 
 ${getStockText()}`);
 
+    // 🔥 FINAL POPUP WITH BUTTON ONLY
     bot.sendMessage(uid,
-`✅ VERIFIED
+`🔥 *COBRA PREMIUM ACCESS*
 
-🔑 \`${key}\`
-📅 ${expiry.toDateString()}
-🔗 ${CHANNEL_LINK}`,
-{parse_mode:"Markdown"});
+━━━━━━━━━━━━━━
+
+✅ *PAYMENT VERIFIED*
+
+🔑 *YOUR KEY:*
+\`${key}\`
+
+📅 *EXPIRY:* ${expiry.toDateString()}
+
+━━━━━━━━━━━━━━
+
+⚡ *ENJOY PREMIUM ACCESS*`,
+{
+  parse_mode:"Markdown",
+  reply_markup:{
+    inline_keyboard:[
+      [
+        {text:"🚀 JOIN NOW", url:"https://t.me/+wRZN39fdVcRkYTM9"}
+      ]
+    ]
+  }
+});
 
     delete userPlan[uid];
   }
 
-  // REJECT
   if(d.startsWith("reject_")){
     bot.editMessageReplyMarkup({inline_keyboard:[]},{
       chat_id:q.message.chat.id,message_id:q.message.message_id
@@ -325,7 +333,6 @@ ${getStockText()}`);
     bot.sendMessage(uid,"❌ PAYMENT REJECTED");
   }
 
-  // ADMIN
   if(d==="addstock"){
     bot.sendMessage(id,"SELECT PLAN",{
       reply_markup:{
@@ -349,7 +356,7 @@ ${getStockText()}`);
   }
 });
 
-// ADMIN PANEL
+// ADMIN
 bot.onText(/\/admin/,msg=>{
   if(msg.from.id!==ADMIN_ID) return;
 
