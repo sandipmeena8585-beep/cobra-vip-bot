@@ -1,6 +1,6 @@
 const TelegramBot = require('node-telegram-bot-api');
 const express = require("express");
-const fs = require("fs");
+const mongoose = require("mongoose");
 
 const token = process.env.BOT_TOKEN || "8304628992:AAF2gzdL33mdIkBuoVMUQUbzTOQZEeUvoqI";
 const ADMIN_ID = 7707237527;
@@ -18,22 +18,23 @@ const app = express();
 app.get("/", (req,res)=>res.send("RUNNING"));
 app.listen(process.env.PORT || 3000);
 
-// FILE SYSTEM
-function loadJSON(file, def){
-  try{
-    return JSON.parse(fs.readFileSync(file));
-  }catch{
-    fs.writeFileSync(file, JSON.stringify(def,null,2));
-    return def;
-  }
-}
-function saveJSON(file, data){
-  fs.writeFileSync(file, JSON.stringify(data,null,2));
-}
+// 🔥 MONGO CONNECT
+mongoose.connect("mongodb+srv://sandipmeena8585_db_user:Tck2CfHfuw2Odb2k@cluster0.uqwcyyn.mongodb.net/cobra")
+.then(()=>console.log("MongoDB Connected ✅"))
+.catch(err=>console.log(err));
 
-// DATA
-let keys = loadJSON("keys.json",{ plan1:[],plan2:[],plan3:[],plan4:[],plan5:[] });
-let data = loadJSON("data.json",{ sold:[] });
+// SCHEMA
+const Key = mongoose.model("Key",{
+  plan:String,
+  key:String
+});
+
+const Sold = mongoose.model("Sold",{
+  user:String,
+  key:String,
+  plan:String,
+  expiry:String
+});
 
 // PLANS
 const plans = {
@@ -46,34 +47,42 @@ const plans = {
 
 let userPlan={}, selectedPlan={}, waitingScreenshot={};
 
-// STOCK
-function getStockText(){
+// 📦 STOCK
+async function getStockText(){
+  let p1 = await Key.countDocuments({plan:"plan1"});
+  let p2 = await Key.countDocuments({plan:"plan2"});
+  let p3 = await Key.countDocuments({plan:"plan3"});
+  let p4 = await Key.countDocuments({plan:"plan4"});
+  let p5 = await Key.countDocuments({plan:"plan5"});
+
   return `📦 LIVE STOCK
 
-1 DAY : ${keys.plan1.length}
-7 DAY : ${keys.plan2.length}
-15 DAY : ${keys.plan3.length}
-30 DAY : ${keys.plan4.length}
-60 DAY : ${keys.plan5.length}`;
+1 DAY : ${p1}
+7 DAY : ${p2}
+15 DAY : ${p3}
+30 DAY : ${p4}
+60 DAY : ${p5}`;
 }
 
-// REPORT
-function getFullReport(){
+// 📊 REPORT
+async function getFullReport(){
+  let stock = await getStockText();
+  let total = await Sold.countDocuments();
+  let last = await Sold.find().sort({_id:-1}).limit(10);
+
   let text = `📊 FULL REPORT
 
-${getStockText()}
+${stock}
 
 ━━━━━━━━━━━━━━
-💰 TOTAL SOLD : ${data.sold.length}
+💰 TOTAL SOLD : ${total}
 ━━━━━━━━━━━━━━
 
 🧾 LAST 10 SALES:
 `;
 
-  let last = data.sold.slice(-10).reverse();
   last.forEach(s=>{
     text += `
-
 👤 ${s.user}
 🔑 ${s.key}
 📦 ${s.plan}
@@ -84,13 +93,13 @@ ${getStockText()}
   return text;
 }
 
-// HOME
+// 🏠 HOME
 function showHome(chatId){
   bot.sendMessage(chatId,
-`🏠 𝗖𝗢𝗕𝗥𝗔 𝗔𝗣𝗣
+`🏠 COBRA APP
 
 ━━━━━━━━━━━━━━
-💎 PREMIUM ACCESS
+💎 PREMIUM ACCESS PANEL
 ━━━━━━━━━━━━━━
 
 👇 SELECT OPTION`,
@@ -112,7 +121,7 @@ function showHome(chatId){
 bot.onText(/\/start/,msg=>showHome(msg.chat.id));
 
 // MESSAGE
-bot.on("message",msg=>{
+bot.on("message", async msg=>{
   let id = msg.from.id;
 
   if(waitingScreenshot[id] && msg.photo){
@@ -134,50 +143,26 @@ bot.on("message",msg=>{
     return;
   }
 
-  if(msg.reply_to_message && msg.reply_to_message.text.includes("ENTER YOUR UTR")){
-    let plan=userPlan[id];
-    if(!plan) return showHome(id);
-
-    bot.sendMessage(ADMIN_ID,
-`📥 PAYMENT REQUEST
-
-USER:${id}
-PLAN:${plan.name}
-UTR:${msg.text}`,
-{
-  reply_markup:{
-    inline_keyboard:[[
-      {text:"✅ VERIFY",callback_data:`approve_${id}`},
-      {text:"❌ REJECT",callback_data:`reject_${id}`}
-    ]]
-  }
-});
-
-    bot.sendMessage(id,"⏳ WAIT ADMIN");
-    return;
-  }
-
   if(selectedPlan[id]){
-    msg.text.split("\n").forEach(k=>{
-      if(k.trim()) keys[selectedPlan[id]].push(k.trim());
-    });
+    let lines = msg.text.split("\n");
+    for(let k of lines){
+      if(k.trim()){
+        await Key.create({plan:selectedPlan[id],key:k.trim()});
+      }
+    }
 
-    saveJSON("keys.json",keys);
-
-    bot.sendMessage(id,`✅ STOCK UPDATED\n${getStockText()}`);
-    bot.sendMessage(ADMIN_ID,`📢 STOCK UPDATED\n\n${getStockText()}`);
-
+    bot.sendMessage(id,"✅ STOCK ADDED");
     selectedPlan[id]=null;
     return;
   }
 
   if(msg.text && !msg.text.startsWith("/") && !msg.reply_to_message){
-    showHome(msg.chat.id);
+    showHome(id);
   }
 });
 
 // BUTTONS
-bot.on("callback_query",q=>{
+bot.on("callback_query", async q=>{
   let d=q.data,id=q.from.id;
   bot.answerCallbackQuery(q.id);
 
@@ -198,12 +183,9 @@ bot.on("callback_query",q=>{
 
   if(d==="app_info"){
     return bot.sendMessage(id,
-`📊 INFO
-
-💎 FULL TRUST 😎
+`💎 FULL TRUST 😎
 🚫 NO SCAM ❌
-⚡ FAST DELIVERY
-🔐 SAFE SYSTEM`,
+⚡ FAST DELIVERY`,
 {
       reply_markup:{
         inline_keyboard:[
@@ -216,16 +198,11 @@ bot.on("callback_query",q=>{
 
   if(d==="app_help"){
     return bot.sendMessage(id,
-`⚙️ HELP
-
-1. Select plan
-2. Pay UPI
-3. Send proof
-4. Get key`,
+`CONTACT: @GODx_COBRA`,
 {
       reply_markup:{
         inline_keyboard:[
-          [{text:"💬 OPEN DM",url:"https://t.me/GODx_COBRA"}],
+          [{text:"OPEN DM",url:"https://t.me/GODx_COBRA"}],
           [{text:"⬅️ HOME",callback_data:"app_home"}]
         ]
       }
@@ -239,16 +216,12 @@ bot.on("callback_query",q=>{
     bot.sendPhoto(id,QR_LINK,{
       caption:`💰 PAYMENT
 
-👤 ${PAYMENT_NAME}
-📦 ${plans[p].name}
+${plans[p].name}
 
-UPI:
-\`${UPI_ID}\``,
-      parse_mode:"Markdown",
+UPI: ${UPI_ID}`,
       reply_markup:{
         inline_keyboard:[
-          [{text:"📸 SCREENSHOT",callback_data:"screenshot"}],
-          [{text:"💳 ENTER UTR",callback_data:"enter_utr"}]
+          [{text:"📸 SCREENSHOT",callback_data:"screenshot"}]
         ]
       }
     });
@@ -256,81 +229,46 @@ UPI:
 
   if(d==="screenshot"){
     waitingScreenshot[id]=true;
-    bot.sendMessage(id,"📸 SEND SCREENSHOT");
+    bot.sendMessage(id,"SEND SCREENSHOT");
   }
 
-  if(d==="enter_utr"){
-    bot.sendMessage(id,"ENTER YOUR UTR",{reply_markup:{force_reply:true}});
-  }
-
-  // ✅ UPDATED POPUP HERE
+  // APPROVE
   if(d.startsWith("approve_")){
-    bot.editMessageReplyMarkup({inline_keyboard:[]},{
-      chat_id:q.message.chat.id,message_id:q.message.message_id
-    });
-
     let uid=d.split("_")[1];
     let plan=userPlan[uid];
-    if(!plan) return;
 
-    let key=keys[plan.id].shift();
-    if(!key) return bot.sendMessage(ADMIN_ID,"❌ STOCK EMPTY");
+    let item = await Key.findOne({plan:plan.id});
+    if(!item) return bot.sendMessage(ADMIN_ID,"❌ STOCK EMPTY");
 
-    saveJSON("keys.json",keys);
+    let key=item.key;
+    await item.deleteOne();
 
     let expiry=new Date();
     expiry.setDate(expiry.getDate()+plan.days);
 
-    data.sold.push({user:uid,key,plan:plan.name,expiry:expiry.toISOString()});
-    saveJSON("data.json",data);
+    await Sold.create({
+      user:uid,key,plan:plan.name,expiry:expiry.toISOString()
+    });
 
-    bot.sendMessage(ADMIN_ID,
-`✅ KEY SOLD
-
-USER:${uid}
-PLAN:${plan.name}
-KEY:${key}
-
-${getStockText()}`);
-
-    // 🔥 FINAL POPUP WITH BUTTON ONLY
     bot.sendMessage(uid,
 `🔥 *COBRA PREMIUM ACCESS*
 
 ━━━━━━━━━━━━━━
 
-✅ *PAYMENT VERIFIED*
+🔑 \`${key}\`
+📅 ${expiry.toDateString()}
 
-🔑 *YOUR KEY:*
-\`${key}\`
-
-📅 *EXPIRY:* ${expiry.toDateString()}
-
-━━━━━━━━━━━━━━
-
-⚡ *ENJOY PREMIUM ACCESS*`,
+━━━━━━━━━━━━━━`,
 {
   parse_mode:"Markdown",
   reply_markup:{
     inline_keyboard:[
-      [
-        {text:"🚀 JOIN NOW", url:"https://t.me/+wRZN39fdVcRkYTM9"}
-      ]
+      [{text:"🚀 JOIN NOW", url:"https://t.me/+wRZN39fdVcRkYTM9"}]
     ]
   }
 });
 
     delete userPlan[uid];
-  }
-
-  if(d.startsWith("reject_")){
-    bot.editMessageReplyMarkup({inline_keyboard:[]},{
-      chat_id:q.message.chat.id,message_id:q.message.message_id
-    });
-
-    let uid=d.split("_")[1];
-    delete userPlan[uid];
-    bot.sendMessage(uid,"❌ PAYMENT REJECTED");
   }
 
   if(d==="addstock"){
@@ -347,8 +285,7 @@ ${getStockText()}`);
     });
   }
 
-  if(d==="full_report") return bot.sendMessage(id,getFullReport());
-  if(d==="check_stock") return bot.sendMessage(id,getStockText());
+  if(d==="full_report") return bot.sendMessage(id,await getFullReport());
 
   if(d.startsWith("plan")){
     selectedPlan[id]=d;
@@ -360,12 +297,11 @@ ${getStockText()}`);
 bot.onText(/\/admin/,msg=>{
   if(msg.from.id!==ADMIN_ID) return;
 
-  bot.sendMessage(msg.chat.id,"⚙️ ADMIN PANEL",{
+  bot.sendMessage(msg.chat.id,"ADMIN PANEL",{
     reply_markup:{
       inline_keyboard:[
-        [{text:"➕ ADD STOCK",callback_data:"addstock"}],
-        [{text:"📊 FULL REPORT",callback_data:"full_report"}],
-        [{text:"📦 CHECK STOCK",callback_data:"check_stock"}]
+        [{text:"ADD STOCK",callback_data:"addstock"}],
+        [{text:"FULL REPORT",callback_data:"full_report"}]
       ]
     }
   });
