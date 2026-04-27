@@ -15,14 +15,27 @@ const PAYMENT_NAME = "SANDIP MEENA";
 // ===== SERVER =====
 const app = express();
 app.use(express.json());
+
 app.get("/", (req,res)=>res.send("RUNNING"));
-app.listen(process.env.PORT || 3000);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, ()=>console.log("Server Running on " + PORT));
 
 // ===== BOT =====
 const bot = new TelegramBot(token);
 const URL = process.env.RENDER_EXTERNAL_URL;
 
-bot.setWebHook(`${URL}/bot${token}`);
+// 🔥 IMPORTANT FIX (409 ERROR REMOVE)
+(async () => {
+  try {
+    await bot.deleteWebHook(); // old remove
+    await bot.setWebHook(`${URL}/bot${token}`);
+    console.log("Webhook set ✅");
+  } catch (e) {
+    console.log("Webhook error ❌", e.message);
+  }
+})();
+
 app.post(`/bot${token}`, (req,res)=>{
   bot.processUpdate(req.body);
   res.sendStatus(200);
@@ -30,10 +43,16 @@ app.post(`/bot${token}`, (req,res)=>{
 
 // ===== MODELS =====
 const Key = mongoose.model("Key",{plan:String,key:String});
+
 const Sale = mongoose.model("Sale",{
-  user:String,key:String,plan:String,expiry:Date,utr:String,
+  user:String,
+  key:String,
+  plan:String,
+  expiry:Date,
+  utr:String,
   createdAt:{type:Date,default:Date.now}
 });
+
 const User = mongoose.model("User",{id:Number});
 const Log = mongoose.model("Log",{text:String,date:{type:Date,default:Date.now}});
 
@@ -50,7 +69,8 @@ let userPlan={}, waitingScreenshot={}, selectedPlan={}, userUTR={};
 
 // ===== DB =====
 mongoose.connect(MONGO_URL)
-.then(()=>console.log("MongoDB Connected ✅"));
+.then(()=>console.log("MongoDB Connected ✅"))
+.catch(err=>console.log("Mongo Error ❌",err));
 
 // ===== STOCK =====
 async function getStock(){
@@ -95,7 +115,6 @@ bot.onText(/\/start/,async msg=>{
 bot.on("message",async msg=>{
   let id = msg.from.id;
 
-  // UTR
   if(msg.reply_to_message?.text?.includes("ENTER UTR")){
     userUTR[id]=msg.text;
 
@@ -114,7 +133,6 @@ UTR:${msg.text}`,{
     return bot.sendMessage(id,"⏳ WAIT ADMIN");
   }
 
-  // SCREENSHOT
   if(waitingScreenshot[id] && msg.photo){
     bot.sendPhoto(ADMIN_ID,msg.photo.pop().file_id,{
       caption:`USER:${id}\nPLAN:${userPlan[id].name}`,
@@ -130,7 +148,6 @@ UTR:${msg.text}`,{
     return bot.sendMessage(id,"⏳ WAIT ADMIN");
   }
 
-  // ADD STOCK
   if(selectedPlan[id]){
     for(let k of msg.text.split("\n")){
       if(k.trim()){
@@ -195,7 +212,6 @@ bot.on("callback_query",async q=>{
     return bot.sendMessage(id,"ENTER UTR",{reply_markup:{force_reply:true}});
   }
 
-  // ===== APPROVE =====
   if(d.startsWith("approve_")){
     await bot.editMessageReplyMarkup({inline_keyboard:[]},{
       chat_id:q.message.chat.id,message_id:q.message.message_id
@@ -243,7 +259,6 @@ bot.on("callback_query",async q=>{
     delete userUTR[uid];
   }
 
-  // ===== REJECT =====
   if(d.startsWith("reject_")){
     await bot.editMessageReplyMarkup({inline_keyboard:[]},{
       chat_id:q.message.chat.id,message_id:q.message.message_id
@@ -256,7 +271,6 @@ bot.on("callback_query",async q=>{
     delete userPlan[uid];
   }
 
-  // ===== ADMIN =====
   if(d==="addstock"){
     return bot.sendMessage(id,"SELECT PLAN",{
       reply_markup:{
