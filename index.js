@@ -41,13 +41,14 @@ let userPlan={}, selectedPlan={}, waitingUTR={}, waitingSS={}, deleteMode={};
 
 // ===== HOME =====
 function home(id){
-  bot.sendMessage(id,"𝐂𝐎𝐁𝐑𝐀 𝐏𝐀𝐍𝐄𝐋",{
+  bot.sendMessage(id,
+`🏠 𝐂𝐎𝐁𝐑𝐀 𝐏𝐀𝐍𝐄𝐋`,{
     reply_markup:{
       inline_keyboard:[
-        [{text:"BUY",callback_data:"buy"}],
-        [{text:"ACCOUNT",callback_data:"account"}],
-        [{text:"INFO",callback_data:"info"}],
-        [{text:"HELP",callback_data:"help"}]
+        [{text:"🛒 BUY",callback_data:"buy"}],
+        [{text:"👤 ACCOUNT",callback_data:"account"}],
+        [{text:"📊 INFO",callback_data:"info"}],
+        [{text:"⚙️ HELP",callback_data:"help"}]
       ]
     }
   });
@@ -69,14 +70,14 @@ bot.on("message",async msg=>{
       if(k.trim()) await Key.create({plan:selectedPlan[id],key:k.trim()});
     }
     selectedPlan[id]=null;
-    return bot.sendMessage(id,"STOCK ADDED");
+    return bot.sendMessage(id,"✅ STOCK ADDED");
   }
 
-  // DELETE
+  // DELETE KEY
   if(deleteMode[id]){
     await Key.deleteOne({key:msg.text.trim()});
     deleteMode[id]=false;
-    return bot.sendMessage(id,"KEY DELETED");
+    return bot.sendMessage(id,"🗑 KEY DELETED");
   }
 
   // UTR
@@ -84,15 +85,15 @@ bot.on("message",async msg=>{
     waitingUTR[id]=false;
 
     return bot.sendMessage(ADMIN_ID,
-`PAYMENT REQUEST
+`💳 PAYMENT REQUEST
 
 USER: ${id}
 PLAN: ${userPlan[id].name}
 UTR: ${msg.text}`,{
       reply_markup:{
         inline_keyboard:[[
-          {text:"VERIFY",callback_data:`approve_${id}`},
-          {text:"REJECT",callback_data:`reject_${id}`}
+          {text:"✅ VERIFY",callback_data:`approve_${id}`},
+          {text:"❌ REJECT",callback_data:`reject_${id}`}
         ]]
       }
     });
@@ -101,7 +102,7 @@ UTR: ${msg.text}`,{
   // SCREENSHOT
   if(waitingSS[id] && msg.photo){
     bot.sendPhoto(ADMIN_ID,msg.photo.pop().file_id,{
-      caption:`USER:${id}\nPLAN:${userPlan[id].name}`,
+      caption:`USER: ${id}\nPLAN: ${userPlan[id].name}`,
       reply_markup:{
         inline_keyboard:[[
           {text:"VERIFY",callback_data:`approve_${id}`},
@@ -111,7 +112,7 @@ UTR: ${msg.text}`,{
     });
 
     waitingSS[id]=false;
-    return bot.sendMessage(id,"WAIT ADMIN");
+    return bot.sendMessage(id,"⏳ WAIT ADMIN");
   }
 
   if(msg.text && !msg.text.startsWith("/")){
@@ -124,6 +125,7 @@ bot.on("callback_query",async q=>{
   let d=q.data,id=q.from.id;
   bot.answerCallbackQuery(q.id);
 
+  // BUY
   if(d==="buy"){
     return bot.sendMessage(id,"SELECT PLAN",{
       reply_markup:{
@@ -134,17 +136,23 @@ bot.on("callback_query",async q=>{
     });
   }
 
+  // SELECT PLAN
   if(d.startsWith("buy_")){
     let p=d.split("_")[1];
     userPlan[id]={...plans[p],id:p};
 
     return bot.sendPhoto(id,QR_LINK,{
-      caption:`PAYMENT\n\`${UPI_ID}\``,
+      caption:`💳 PAYMENT
+
+UPI:
+\`${UPI_ID}\`
+
+SEND SCREENSHOT OR ENTER UTR`,
       parse_mode:"Markdown",
       reply_markup:{
         inline_keyboard:[
-          [{text:"ENTER UTR",callback_data:"utr"}],
-          [{text:"SEND SCREENSHOT",callback_data:"ss"}]
+          [{text:"📸 SEND SCREENSHOT",callback_data:"ss"}],
+          [{text:"💳 ENTER UTR",callback_data:"utr"}]
         ]
       }
     });
@@ -170,7 +178,7 @@ bot.on("callback_query",async q=>{
     let uid=d.split("_")[1];
 
     let key=await Key.findOneAndDelete({plan:userPlan[uid].id});
-    if(!key) return bot.sendMessage(ADMIN_ID,"NO STOCK");
+    if(!key) return bot.sendMessage(ADMIN_ID,"❌ NO STOCK");
 
     let exp=new Date();
     exp.setDate(exp.getDate()+userPlan[uid].days);
@@ -178,16 +186,16 @@ bot.on("callback_query",async q=>{
     await Sale.create({user:uid,key:key.key,plan:userPlan[uid].name,expiry:exp});
 
     bot.sendMessage(uid,
-`ENJOY COBRA SERVER  
+`𝐄𝐍𝐉𝐎𝐘 𝐂𝐎𝐁𝐑𝐀 𝐒𝐄𝐑𝐕𝐄𝐑  
 
-KEY - \`${key.key}\`  
+𝐊𝐄𝐘 - \`${key.key}\`  
 
-KILL LIMIT 10 12 LEGIT PLAY SAFE`,
+𝐊𝐈𝐋𝐋 𝐋𝐈𝐌𝐈𝐓 10 12 𝐋𝐄𝐆𝐈𝐓 𝐏𝐋𝐀𝐘 𝐒𝐀𝐅𝐄`,
 {
       parse_mode:"Markdown",
       reply_markup:{
         inline_keyboard:[
-          [{text:"JOIN GROUP",url:CHANNEL_LINK}]
+          [{text:"📦 JOIN PAID GROUP",url:CHANNEL_LINK}]
         ]
       }
     });
@@ -203,27 +211,27 @@ KILL LIMIT 10 12 LEGIT PLAY SAFE`,
     });
 
     let uid=d.split("_")[1];
-    bot.sendMessage(uid,"PAYMENT REJECTED");
+    bot.sendMessage(uid,"❌ PAYMENT REJECTED");
   }
 
   // ACCOUNT
   if(d==="account"){
     let latest=await Sale.findOne({user:id}).sort({createdAt:-1});
-    if(!latest) return bot.sendMessage(id,"NO PLAN");
+    if(!latest) return bot.sendMessage(id,"❌ NO PLAN");
 
     return bot.sendMessage(id,
-`ACCOUNT
+`👤 ACCOUNT
 
 KEY - \`${latest.key}\`
 
-EXPIRE: ${latest.expiry}`,
+EXPIRE: ${latest.expiry.toLocaleString()}`,
 {parse_mode:"Markdown"});
   }
 
   // INFO
   if(d==="info"){
     return bot.sendMessage(id,
-`COBRA SERVER
+`📊 COBRA SERVER
 
 ESP - 350M
 AIMBOT - 150M
@@ -236,7 +244,7 @@ IPDA VIEW - YES / NO`);
 `KEY ISSUE
 PAYMENT ISSUE
 
-@GODx_COBRA`);
+CONTACT OWNER - @GODx_COBRA`);
   }
 
   // ADMIN
@@ -254,7 +262,7 @@ PAYMENT ISSUE
 
   if(d.startsWith("plan_")){
     selectedPlan[id]=d.replace("plan_","");
-    return bot.sendMessage(id,"SEND KEYS");
+    return bot.sendMessage(id,"SEND KEYS LINE BY LINE");
   }
 
   if(d==="delkey"){
@@ -263,6 +271,7 @@ PAYMENT ISSUE
     return bot.sendMessage(id,"SEND KEY TO DELETE");
   }
 
+  // STATS
   if(d==="stats"){
     if(id!==ADMIN_ID) return;
 
@@ -270,7 +279,9 @@ PAYMENT ISSUE
     let sold=await Sale.countDocuments();
     let expired=await Sale.countDocuments({expiry:{$lt:new Date()}});
 
-    let txt=`STOCK: ${stock}
+    let txt=`📊 ADMIN STATS
+
+STOCK: ${stock}
 SOLD: ${sold}
 EXPIRED: ${expired}\n\n`;
 
@@ -283,16 +294,16 @@ EXPIRED: ${expired}\n\n`;
   }
 });
 
-// ===== ADMIN =====
+// ===== ADMIN PANEL =====
 bot.onText(/\/admin/,msg=>{
   if(msg.from.id!==ADMIN_ID) return;
 
-  bot.sendMessage(msg.chat.id,"ADMIN PANEL",{
+  bot.sendMessage(msg.chat.id,"⚙️ ADMIN PANEL",{
     reply_markup:{
       inline_keyboard:[
-        [{text:"ADD STOCK",callback_data:"addstock"}],
-        [{text:"DELETE KEY",callback_data:"delkey"}],
-        [{text:"STATS",callback_data:"stats"}]
+        [{text:"➕ ADD STOCK",callback_data:"addstock"}],
+        [{text:"🗑 DELETE KEY",callback_data:"delkey"}],
+        [{text:"📊 STATS",callback_data:"stats"}]
       ]
     }
   });
