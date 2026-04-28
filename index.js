@@ -29,16 +29,16 @@ mongoose.connect(MONGO_URL)
 
 // ===== MODELS =====
 const Key = mongoose.model("Key",{plan:String,key:String});
-
 const Sale = mongoose.model("Sale",{
   user:String,
   key:String,
   plan:String,
   expiry:Date,
   utr:String,
+  walletUsed:Number,
+  upiPaid:Number,
   createdAt:{type:Date,default:Date.now}
 });
-
 const User = mongoose.model("User",{
   id:Number,
   refBy:Number,
@@ -49,15 +49,15 @@ const User = mongoose.model("User",{
 
 // ===== PLANS =====
 const plans = {
-  plan1:{name:"🗝️ 1 DAY - 100₹",days:1,ref:10},
-  plan2:{name:"🗝️ 7 DAY - 400₹",days:7,ref:50},
-  plan3:{name:"🗝️ 15 DAY - 700₹",days:15,ref:80},
-  plan4:{name:"🗝️ 30 DAY - 900₹",days:30,ref:100},
-  plan5:{name:"🗝️ 60 DAY - 1200₹",days:60,ref:200}
+  plan1:{name:"🗝️ 1 DAY - 100₹",days:1,ref:10,price:100},
+  plan2:{name:"🗝️ 7 DAY - 400₹",days:7,ref:50,price:400},
+  plan3:{name:"🗝️ 15 DAY - 700₹",days:15,ref:80,price:700},
+  plan4:{name:"🗝️ 30 DAY - 900₹",days:30,ref:100,price:900},
+  plan5:{name:"🗝️ 60 DAY - 1200₹",days:60,ref:200,price:1200}
 };
 
 // ===== STATE =====
-let userPlan={}, waitingUTR={}, userUTR={}, selectedPlan={};
+let userPlan={}, waitingUTR={}, userUTR={}, selectedPlan={}, walletUse={};
 
 // ===== STOCK =====
 async function getStock(){
@@ -116,16 +116,23 @@ bot.onText(/\/start/, async msg=>{
 bot.on("message", async msg=>{
   let id = msg.from.id;
 
-  // UTR
   if(waitingUTR[id]){
     userUTR[id]=msg.text;
     waitingUTR[id]=false;
+
+    let plan=userPlan[id];
+    let wallet=walletUse[id]||0;
+    let upi=plan.price - wallet;
 
     return bot.sendMessage(ADMIN_ID,
 `💳 PAYMENT REQUEST
 
 USER: ${id}
-PLAN: ${userPlan[id].name}
+PLAN: ${plan.name}
+
+WALLET USED: ₹${wallet}
+UPI PAID: ₹${upi}
+
 UTR: ${msg.text}`,{
       reply_markup:{
         inline_keyboard:[[
@@ -138,9 +145,12 @@ UTR: ${msg.text}`,{
 
   // STOCK ADD
   if(selectedPlan[id]){
-    msg.text.split("\n").forEach(async k=>{
-      if(k.trim()) await Key.create({plan:selectedPlan[id],key:k.trim()});
-    });
+    let keys = msg.text.split("\n");
+    for(let k of keys){
+      if(k.trim()){
+        await Key.create({plan:selectedPlan[id],key:k.trim()});
+      }
+    }
     selectedPlan[id]=null;
     return bot.sendMessage(id,"✅ STOCK ADDED\n"+await getStock());
   }
@@ -171,6 +181,9 @@ bot.on("callback_query", async q=>{
     let p=d.split("_")[1];
     userPlan[id]={...plans[p],id:p};
 
+    let u=await User.findOne({id});
+    let wallet=u?.balance||0;
+
     return bot.sendPhoto(id,QR_LINK,{
       caption:
 `💳 PAYMENT
@@ -180,17 +193,29 @@ bot.on("callback_query", async q=>{
 📲 UPI:
 \`${UPI_ID}\`
 
+💰 PRICE: ₹${plans[p].price}
+💸 WALLET: ₹${wallet}
+
 ━━━━━━━━━━━━━━
-✔ Tap to Copy UPI
-✔ Scan QR
+✔ Wallet + UPI mix allowed
 ━━━━━━━━━━━━━━`,
       parse_mode:"Markdown",
       reply_markup:{
         inline_keyboard:[
+          [{text:"💰 USE WALLET",callback_data:"usewallet"}],
           [{text:"💳 ENTER UTR",callback_data:"utr"}]
         ]
       }
     });
+  }
+
+  if(d==="usewallet"){
+    let u=await User.findOne({id});
+    let plan=userPlan[id];
+    let use=Math.min(u.balance,plan.price);
+    walletUse[id]=use;
+
+    return bot.sendMessage(id,`💸 WALLET USED ₹${use}`);
   }
 
   if(d==="utr"){
@@ -213,14 +238,23 @@ bot.on("callback_query", async q=>{
     let exp=new Date();
     exp.setDate(exp.getDate()+userPlan[uid].days);
 
+    let plan=userPlan[uid];
     let user=await User.findOne({id:uid});
 
-    // ===== REFER FIX =====
+    let wallet=walletUse[uid]||0;
+    let upi=plan.price-wallet;
+
+    // deduct wallet
+    if(wallet>0){
+      await User.updateOne({id:uid},{$inc:{balance:-wallet}});
+    }
+
+    // refer reward
     if(user.refBy){
       let refUser=await User.findOne({id:user.refBy});
       if(refUser && !refUser.referredUsers.includes(uid)){
         refUser.referredUsers.push(uid);
-        refUser.balance += userPlan[uid].ref;
+        refUser.balance += plan.ref;
         refUser.referrals += 1;
         await refUser.save();
       }
@@ -229,9 +263,11 @@ bot.on("callback_query", async q=>{
     await Sale.create({
       user:uid,
       key:key.key,
-      plan:userPlan[uid].name,
+      plan:plan.name,
       expiry:exp,
-      utr:userUTR[uid]
+      utr:userUTR[uid],
+      walletUsed:wallet,
+      upiPaid:upi
     });
 
     bot.sendMessage(uid,
@@ -251,58 +287,55 @@ ${exp.toLocaleString()}
 `💰 SALE DONE
 
 USER: ${uid}
-KEY: ${key.key}`);
+PLAN: ${plan.name}
+
+WALLET: ₹${wallet}
+UPI: ₹${upi}`);
 
     delete userPlan[uid];
+    delete walletUse[uid];
     delete userUTR[uid];
   }
 
-  // ===== ACCOUNT =====
+  // ACCOUNT
   if(d==="account"){
+    let u=await User.findOne({id});
     let sales=await Sale.find({user:id});
+
     let txt="👤 ACCOUNT\n\n";
 
     sales.forEach(s=>{
       txt+=`🔑 KEY:\n\`${s.key}\`\n📅 ${s.expiry}\n\n`;
     });
 
-    let u=await User.findOne({id});
-
-    txt+=`💰 WALLET: ₹${u?.balance||0}\n👥 REF: ${u?.referrals||0}`;
+    txt+=`💰 WALLET: ₹${u?.balance||0}
+👥 REF: ${u?.referrals||0}`;
 
     return bot.sendMessage(id,txt,{parse_mode:"Markdown"});
   }
 
-  // ===== REFER =====
+  // REFER
   if(d==="refer"){
     return bot.sendMessage(id,
 `🎁 REFER & EARN
 
-Invite friends → they buy → you earn 💰
+1 DAY = ₹10
+7 DAY = ₹50
+15 DAY = ₹80
+30 DAY = ₹100
+60 DAY = ₹200
 
-👇 Tap below`,
-    {
-      reply_markup:{
-        inline_keyboard:[
-          [{text:"🔗 GET LINK",callback_data:"getlink"}]
-        ]
-      }
-    });
-  }
-
-  if(d==="getlink"){
-    return bot.sendMessage(id,
-`🔗 YOUR LINK
-
+👇 SHARE LINK
 https://t.me/${BOT_USERNAME}?start=${id}`);
   }
 
   // INFO
   if(d==="info"){
     return bot.sendMessage(id,
-`🔥 TRUSTED SELLER
-⚡ INSTANT DELIVERY
-🛡️ SAFE SYSTEM`);
+`📊 INFO
+
+Refer karke earning kar sakte ho
+Wallet ka use karke discount bhi le sakte ho`);
   }
 
   // HELP
@@ -310,10 +343,24 @@ https://t.me/${BOT_USERNAME}?start=${id}`);
     return bot.sendMessage(id,
 `⚙️ HELP
 
-❌ KEY ISSUE
-❌ PAYMENT ISSUE
-
+KEY ISSUE / PAYMENT ISSUE
 DM 👉 @GODx_COBRA`);
+  }
+
+  // ADMIN REFER
+  if(d==="refstats"){
+    if(id!==ADMIN_ID) return;
+
+    let users=await User.find();
+    let txt="📊 REFER DATA\n\n";
+
+    users.forEach(u=>{
+      if(u.referrals>0){
+        txt+=`ID:${u.id}\nREF:${u.referrals}\nBAL:₹${u.balance}\n\n`;
+      }
+    });
+
+    return bot.sendMessage(id,txt);
   }
 
   // ADMIN STOCK
@@ -363,7 +410,8 @@ bot.onText(/\/admin/,msg=>{
     reply_markup:{
       inline_keyboard:[
         [{text:"➕ ADD STOCK",callback_data:"addstock"}],
-        [{text:"📊 STATS",callback_data:"stats"}]
+        [{text:"📊 STATS",callback_data:"stats"}],
+        [{text:"🎁 REFER DATA",callback_data:"refstats"}]
       ]
     }
   });
