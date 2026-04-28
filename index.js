@@ -6,9 +6,8 @@ const mongoose = require("mongoose");
 const token = process.env.BOT_TOKEN || "8304628992:AAFHjdhzF33fiH2QHjQScU9lK2zgqAx7nIc";
 const MONGO_URL = "mongodb+srv://COBRA:Cobra%4012345@cluster0.uqwcyny.mongodb.net/cobra?retryWrites=true&w=majority";
 const ADMIN_ID = 7707237527;
-const BOT_USERNAME = "GODx_cobraBOT";
 
-const CHANNEL_LINK = "https://t.me/+wRZN39fdVcRkYTM9";
+const CHANNEL_LINK = "https://t.me/+wRZN39fdVcRkYTM9"; // 🔥 Paid Group Link
 const UPI_ID = "godxcobra@axl";
 const PAYMENT_NAME = "SANDIP MEENA";
 const QR_LINK = "https://images.weserv.nl/?url=raw.githubusercontent.com/sandipmeena8585-beep/cobra-bot/main/upi_qr.png";
@@ -29,48 +28,22 @@ mongoose.connect(MONGO_URL)
 
 // ===== MODELS =====
 const Key = mongoose.model("Key",{plan:String,key:String});
-const Sale = mongoose.model("Sale",{
-  user:String,
-  key:String,
-  plan:String,
-  expiry:Date,
-  utr:String,
-  walletUsed:Number,
-  upiPaid:Number,
-  createdAt:{type:Date,default:Date.now}
-});
-const User = mongoose.model("User",{
-  id:Number,
-  refBy:Number,
-  balance:{type:Number,default:0},
-  referrals:{type:Number,default:0},
-  referredUsers:[Number]
-});
+const Sale = mongoose.model("Sale",{user:String,key:String,plan:String,expiry:Date,utr:String});
+const User = mongoose.model("User",{id:Number});
 
 // ===== PLANS =====
 const plans = {
-  plan1:{name:"🗝️ 1 DAY - 100₹",days:1,ref:10,price:100},
-  plan2:{name:"🗝️ 7 DAY - 400₹",days:7,ref:50,price:400},
-  plan3:{name:"🗝️ 15 DAY - 700₹",days:15,ref:80,price:700},
-  plan4:{name:"🗝️ 30 DAY - 900₹",days:30,ref:100,price:900},
-  plan5:{name:"🗝️ 60 DAY - 1200₹",days:60,ref:200,price:1200}
+  plan1:{name:"🗝️ 1 DAY - 100₹",days:1},
+  plan2:{name:"🗝️ 7 DAY - 400₹",days:7},
+  plan3:{name:"🗝️ 15 DAY - 700₹",days:15},
+  plan4:{name:"🗝️ 30 DAY - 900₹",days:30},
+  plan5:{name:"🗝️ 60 DAY - 1200₹",days:60}
 };
 
 // ===== STATE =====
-let userPlan={}, waitingUTR={}, userUTR={}, selectedPlan={}, walletUse={};
+let userPlan={}, waitingUTR={}, waitingSS={}, userUTR={}, selectedPlan={};
 
-// ===== STOCK =====
-async function getStock(){
-  return `📦 LIVE STOCK
-
-1D: ${await Key.countDocuments({plan:"plan1"})}
-7D: ${await Key.countDocuments({plan:"plan2"})}
-15D: ${await Key.countDocuments({plan:"plan3"})}
-30D: ${await Key.countDocuments({plan:"plan4"})}
-60D: ${await Key.countDocuments({plan:"plan5"})}`;
-}
-
-// ===== HOME =====
+// ===== UI =====
 function home(id){
   bot.sendMessage(id,
 `🏠 COBRA PANEL
@@ -81,7 +54,6 @@ SELECT OPTION
       inline_keyboard:[
         [{text:"🛒 BUY",callback_data:"buy"}],
         [{text:"👤 ACCOUNT",callback_data:"account"}],
-        [{text:"🎁 REFER",callback_data:"refer"}],
         [{text:"📊 INFO",callback_data:"info"}],
         [{text:"⚙️ HELP",callback_data:"help"}]
       ]
@@ -90,22 +62,6 @@ SELECT OPTION
 }
 
 // ===== START =====
-bot.onText(/\/start (.+)/, async (msg,match)=>{
-  let id=msg.from.id;
-  let ref=parseInt(match[1]);
-
-  let exist=await User.findOne({id});
-  if(!exist){
-    if(ref && ref!==id){
-      await User.create({id,refBy:ref,referredUsers:[]});
-    } else {
-      await User.create({id,referredUsers:[]});
-    }
-  }
-
-  home(id);
-});
-
 bot.onText(/\/start/, async msg=>{
   let id=msg.from.id;
   await User.updateOne({id},{id},{upsert:true});
@@ -116,23 +72,16 @@ bot.onText(/\/start/, async msg=>{
 bot.on("message", async msg=>{
   let id = msg.from.id;
 
-  if(waitingUTR[id]){
+  // UTR DETECT
+  if(waitingUTR[id] && msg.text){
     userUTR[id]=msg.text;
     waitingUTR[id]=false;
-
-    let plan=userPlan[id];
-    let wallet=walletUse[id]||0;
-    let upi=plan.price - wallet;
 
     return bot.sendMessage(ADMIN_ID,
 `💳 PAYMENT REQUEST
 
 USER: ${id}
-PLAN: ${plan.name}
-
-WALLET USED: ₹${wallet}
-UPI PAID: ₹${upi}
-
+PLAN: ${userPlan[id].name}
 UTR: ${msg.text}`,{
       reply_markup:{
         inline_keyboard:[[
@@ -143,7 +92,23 @@ UTR: ${msg.text}`,{
     });
   }
 
-  // STOCK ADD
+  // SCREENSHOT DETECT
+  if(waitingSS[id] && msg.photo){
+    bot.sendPhoto(ADMIN_ID,msg.photo.pop().file_id,{
+      caption:`USER:${id}\nPLAN:${userPlan[id].name}`,
+      reply_markup:{
+        inline_keyboard:[[
+          {text:"✅ VERIFY",callback_data:`approve_${id}`},
+          {text:"❌ REJECT",callback_data:`reject_${id}`}
+        ]]
+      }
+    });
+
+    waitingSS[id]=false;
+    return bot.sendMessage(id,"⏳ WAIT ADMIN");
+  }
+
+  // ADD STOCK
   if(selectedPlan[id]){
     let keys = msg.text.split("\n");
     for(let k of keys){
@@ -152,7 +117,7 @@ UTR: ${msg.text}`,{
       }
     }
     selectedPlan[id]=null;
-    return bot.sendMessage(id,"✅ STOCK ADDED\n"+await getStock());
+    return bot.sendMessage(id,"✅ STOCK ADDED");
   }
 
   if(msg.text && !msg.text.startsWith("/")){
@@ -165,7 +130,6 @@ bot.on("callback_query", async q=>{
   let d=q.data,id=q.from.id;
   bot.answerCallbackQuery(q.id);
 
-  // BUY
   if(d==="buy"){
     return bot.sendMessage(id,"SELECT PLAN",{
       reply_markup:{
@@ -176,46 +140,34 @@ bot.on("callback_query", async q=>{
     });
   }
 
-  // PLAN SELECT
   if(d.startsWith("buy_")){
     let p=d.split("_")[1];
     userPlan[id]={...plans[p],id:p};
 
-    let u=await User.findOne({id});
-    let wallet=u?.balance||0;
-
     return bot.sendPhoto(id,QR_LINK,{
       caption:
-`💳 PAYMENT
+`💳 PAYMENT PANEL
 
 👤 ${PAYMENT_NAME}
 
 📲 UPI:
 \`${UPI_ID}\`
 
-💰 PRICE: ₹${plans[p].price}
-💸 WALLET: ₹${wallet}
-
-━━━━━━━━━━━━━━
-✔ Wallet + UPI mix allowed
-━━━━━━━━━━━━━━`,
+✔ Scan QR
+✔ Pay & send proof`,
       parse_mode:"Markdown",
       reply_markup:{
         inline_keyboard:[
-          [{text:"💰 USE WALLET",callback_data:"usewallet"}],
+          [{text:"📸 SEND SCREENSHOT",callback_data:"ss"}],
           [{text:"💳 ENTER UTR",callback_data:"utr"}]
         ]
       }
     });
   }
 
-  if(d==="usewallet"){
-    let u=await User.findOne({id});
-    let plan=userPlan[id];
-    let use=Math.min(u.balance,plan.price);
-    walletUse[id]=use;
-
-    return bot.sendMessage(id,`💸 WALLET USED ₹${use}`);
+  if(d==="ss"){
+    waitingSS[id]=true;
+    return bot.sendMessage(id,"📸 SEND PAYMENT SCREENSHOT");
   }
 
   if(d==="utr"){
@@ -223,7 +175,7 @@ bot.on("callback_query", async q=>{
     return bot.sendMessage(id,"ENTER UTR",{reply_markup:{force_reply:true}});
   }
 
-  // ===== APPROVE =====
+  // APPROVE
   if(d.startsWith("approve_")){
     await bot.editMessageReplyMarkup({inline_keyboard:[]},{
       chat_id:q.message.chat.id,
@@ -238,143 +190,92 @@ bot.on("callback_query", async q=>{
     let exp=new Date();
     exp.setDate(exp.getDate()+userPlan[uid].days);
 
-    let plan=userPlan[uid];
-    let user=await User.findOne({id:uid});
-
-    let wallet=walletUse[uid]||0;
-    let upi=plan.price-wallet;
-
-    // deduct wallet
-    if(wallet>0){
-      await User.updateOne({id:uid},{$inc:{balance:-wallet}});
-    }
-
-    // refer reward
-    if(user.refBy){
-      let refUser=await User.findOne({id:user.refBy});
-      if(refUser && !refUser.referredUsers.includes(uid)){
-        refUser.referredUsers.push(uid);
-        refUser.balance += plan.ref;
-        refUser.referrals += 1;
-        await refUser.save();
-      }
-    }
-
     await Sale.create({
       user:uid,
       key:key.key,
-      plan:plan.name,
+      plan:userPlan[uid].name,
       expiry:exp,
-      utr:userUTR[uid],
-      walletUsed:wallet,
-      upiPaid:upi
+      utr:userUTR[uid]
     });
 
+    // 🔥 FINAL CHANGE: BUTTON ADDED
     bot.sendMessage(uid,
 `🔑 YOUR KEY
 
 \`${key.key}\`
 
 ━━━━━━━━━━━━━━
-🎮 LIMIT: 10-12
-LEGIT PLAY SAFE
-
 📅 EXPIRY:
 ${exp.toLocaleString()}
-━━━━━━━━━━━━━━`,{parse_mode:"Markdown"});
-
-    bot.sendMessage(ADMIN_ID,
-`💰 SALE DONE
-
-USER: ${uid}
-PLAN: ${plan.name}
-
-WALLET: ₹${wallet}
-UPI: ₹${upi}`);
+━━━━━━━━━━━━━━`,{
+      parse_mode:"Markdown",
+      reply_markup:{
+        inline_keyboard:[
+          [{text:"📦 JOIN PAID GROUP", url: CHANNEL_LINK}]
+        ]
+      }
+    });
 
     delete userPlan[uid];
-    delete walletUse[uid];
     delete userUTR[uid];
+  }
+
+  if(d.startsWith("reject_")){
+    await bot.editMessageReplyMarkup({inline_keyboard:[]},{
+      chat_id:q.message.chat.id,
+      message_id:q.message.message_id
+    });
+
+    let uid=d.split("_")[1];
+    bot.sendMessage(uid,"❌ PAYMENT REJECTED");
   }
 
   // ACCOUNT
   if(d==="account"){
-    let u=await User.findOne({id});
     let sales=await Sale.find({user:id});
-
-    let txt="👤 ACCOUNT\n\n";
+    let txt="👤 ACCOUNT\n━━━━━━━━━━━━━━\n\n";
 
     sales.forEach(s=>{
       txt+=`🔑 KEY:\n\`${s.key}\`\n📅 ${s.expiry}\n\n`;
     });
 
-    txt+=`💰 WALLET: ₹${u?.balance||0}
-👥 REF: ${u?.referrals||0}`;
-
     return bot.sendMessage(id,txt,{parse_mode:"Markdown"});
   }
 
-  // REFER
-  if(d==="refer"){
-    return bot.sendMessage(id,
-`🎁 REFER & EARN
-
-1 DAY = ₹10
-7 DAY = ₹50
-15 DAY = ₹80
-30 DAY = ₹100
-60 DAY = ₹200
-
-👇 SHARE LINK
-https://t.me/${BOT_USERNAME}?start=${id}`);
-  }
-
-  // INFO
   if(d==="info"){
     return bot.sendMessage(id,
-`📊 INFO
+`📊 COBRA SERVER MOD
 
-Refer karke earning kar sakte ho
-Wallet ka use karke discount bhi le sakte ho`);
+ESP - 350M
+AIMBOT - 150M
+IPDA VIEW - YES / NO
+
+SMOOTH PLAY
+SAFE SYSTEM`);
   }
 
-  // HELP
   if(d==="help"){
     return bot.sendMessage(id,
 `⚙️ HELP
 
-KEY ISSUE / PAYMENT ISSUE
+❌ PAYMENT ISSUE
+❌ KEY ISSUE
+
 DM 👉 @GODx_COBRA`);
   }
 
-  // ADMIN REFER
-  if(d==="refstats"){
-    if(id!==ADMIN_ID) return;
-
-    let users=await User.find();
-    let txt="📊 REFER DATA\n\n";
-
-    users.forEach(u=>{
-      if(u.referrals>0){
-        txt+=`ID:${u.id}\nREF:${u.referrals}\nBAL:₹${u.balance}\n\n`;
-      }
-    });
-
-    return bot.sendMessage(id,txt);
-  }
-
-  // ADMIN STOCK
+  // ADMIN
   if(d==="addstock"){
     if(id!==ADMIN_ID) return;
 
     return bot.sendMessage(id,"SELECT PLAN",{
       reply_markup:{
         inline_keyboard:[
-          [{text:"1D",callback_data:"plan1"}],
-          [{text:"7D",callback_data:"plan2"}],
-          [{text:"15D",callback_data:"plan3"}],
-          [{text:"30D",callback_data:"plan4"}],
-          [{text:"60D",callback_data:"plan5"}]
+          [{text:"1 DAY",callback_data:"plan1"}],
+          [{text:"7 DAY",callback_data:"plan2"}],
+          [{text:"15 DAY",callback_data:"plan3"}],
+          [{text:"30 DAY",callback_data:"plan4"}],
+          [{text:"60 DAY",callback_data:"plan5"}]
         ]
       }
     });
@@ -386,23 +287,20 @@ DM 👉 @GODx_COBRA`);
     return bot.sendMessage(id,"SEND KEYS LINE BY LINE");
   }
 
-  if(d==="stats"){
+  if(d==="delkey"){
     if(id!==ADMIN_ID) return;
-
-    let users=await User.countDocuments();
-    let sales=await Sale.countDocuments();
-
-    return bot.sendMessage(id,
-`📊 ADMIN PANEL
-
-USERS: ${users}
-SALES: ${sales}
-
-${await getStock()}`);
+    return bot.sendMessage(id,"SEND KEY TO DELETE");
   }
 });
 
-// ===== ADMIN COMMAND =====
+// ===== DELETE KEY =====
+bot.on("message", async msg=>{
+  if(msg.from.id===ADMIN_ID && msg.text && msg.text.length>5){
+    await Key.deleteOne({key:msg.text.trim()});
+  }
+});
+
+// ===== ADMIN =====
 bot.onText(/\/admin/,msg=>{
   if(msg.from.id!==ADMIN_ID) return;
 
@@ -410,8 +308,7 @@ bot.onText(/\/admin/,msg=>{
     reply_markup:{
       inline_keyboard:[
         [{text:"➕ ADD STOCK",callback_data:"addstock"}],
-        [{text:"📊 STATS",callback_data:"stats"}],
-        [{text:"🎁 REFER DATA",callback_data:"refstats"}]
+        [{text:"🗑 DELETE KEY",callback_data:"delkey"}]
       ]
     }
   });
