@@ -23,7 +23,9 @@ app.listen(process.env.PORT || 3000);
 const bot = new TelegramBot(token,{ polling:true });
 
 // ===== DB =====
-mongoose.connect(MONGO_URL);
+mongoose.connect(MONGO_URL)
+.then(()=>console.log("Mongo Connected ✅"))
+.catch(()=>console.log("Mongo Error ❌"));
 
 // ===== MODELS =====
 const Key = mongoose.model("Key",{plan:String,key:String});
@@ -40,7 +42,7 @@ const plans = {
 };
 
 // ===== STATE =====
-let userPlan={}, waitingUTR={}, waitingSS={}, userUTR={}, selectedPlan={}, useWallet={};
+let userPlan={}, waitingUTR={}, userUTR={}, selectedPlan={}, useWallet={};
 
 // ===== STOCK =====
 async function getStock(){
@@ -58,7 +60,7 @@ function home(id){
   bot.sendMessage(id,
 `🏠 COBRA PANEL
 ━━━━━━━━━━━━━━
-Select Option
+SELECT OPTION
 ━━━━━━━━━━━━━━`,{
     reply_markup:{
       inline_keyboard:[
@@ -110,25 +112,14 @@ UTR: ${msg.text}`,{
     });
   }
 
-  if(waitingSS[id] && msg.photo){
-    bot.sendPhoto(ADMIN_ID,msg.photo.pop().file_id,{
-      caption:`USER:${id}\nPLAN:${userPlan[id].name}`,
-      reply_markup:{
-        inline_keyboard:[[
-          {text:"✅ VERIFY",callback_data:`approve_${id}`},
-          {text:"❌ REJECT",callback_data:`reject_${id}`}
-        ]]
-      }
-    });
-
-    waitingSS[id]=false;
-    return bot.sendMessage(id,"⏳ WAIT ADMIN");
-  }
-
+  // ADD STOCK
   if(selectedPlan[id]){
-    msg.text.split("\n").forEach(async k=>{
-      if(k.trim()) await Key.create({plan:selectedPlan[id],key:k.trim()});
-    });
+    let keys = msg.text.split("\n");
+    for(let k of keys){
+      if(k.trim()){
+        await Key.create({plan:selectedPlan[id],key:k.trim()});
+      }
+    }
     selectedPlan[id]=null;
     return bot.sendMessage(id,"✅ STOCK ADDED\n"+await getStock());
   }
@@ -143,6 +134,7 @@ bot.on("callback_query", async q=>{
   let d=q.data,id=q.from.id;
   bot.answerCallbackQuery(q.id);
 
+  // BUY
   if(d==="buy"){
     return bot.sendMessage(id,"SELECT PLAN",{
       reply_markup:{
@@ -153,6 +145,7 @@ bot.on("callback_query", async q=>{
     });
   }
 
+  // PLAN
   if(d.startsWith("buy_")){
     let p=d.split("_")[1];
     userPlan[id]={...plans[p],id:p};
@@ -161,7 +154,7 @@ bot.on("callback_query", async q=>{
 
     return bot.sendPhoto(id,QR_LINK,{
       caption:
-`💳 PAYMENT PANEL
+`💳 PAYMENT
 
 👤 ${PAYMENT_NAME}
 
@@ -175,16 +168,17 @@ bot.on("callback_query", async q=>{
         inline_keyboard:[
           [{text:"💸 USE WALLET",callback_data:"wallet"}],
           [{text:"📸 SCREENSHOT",callback_data:"ss"}],
-          [{text:"💳 ENTER UTR",callback_data:"utr"}]
+          [{text:"💳 UTR",callback_data:"utr"}]
         ]
       }
     });
   }
 
   if(d==="wallet"){ useWallet[id]=true; return bot.sendMessage(id,"WALLET ENABLED"); }
-  if(d==="ss"){ waitingSS[id]=true; return bot.sendMessage(id,"SEND SCREENSHOT"); }
+  if(d==="ss"){ return bot.sendMessage(id,"SEND SCREENSHOT"); }
   if(d==="utr"){ waitingUTR[id]=true; return bot.sendMessage(id,"ENTER UTR",{reply_markup:{force_reply:true}}); }
 
+  // APPROVE
   if(d.startsWith("approve_")){
     let uid=d.split("_")[1];
 
@@ -221,35 +215,45 @@ LEGIT PLAY SAFE
 📅 EXPIRY:
 ${exp.toLocaleString()}`,{parse_mode:"Markdown"});
 
-    bot.sendMessage(ADMIN_ID,`SALE USER:${uid} ₹${price}`);
+    bot.sendMessage(ADMIN_ID,
+`💰 SALE DONE
+
+USER: ${uid}
+KEY: ${key.key}
+₹${price}`);
+
+    delete userPlan[uid];
+    delete userUTR[uid];
   }
 
+  // ACCOUNT
   if(d==="account"){
     let u=await User.findOne({id});
     let active=await Sale.findOne({user:id,expiry:{$gt:new Date()}});
     return bot.sendMessage(id,
 `👤 ACCOUNT
 
-${active?`🔑 ${active.key}\n📅 ${active.expiry}`:"NO ACTIVE"}
+${active?`🔑 ${active.key}\n📅 ${active.expiry}`:"NO PLAN"}
 
 💰 WALLET: ₹${u?.balance||0}
 👥 REF: ${u?.referrals||0}`);
   }
 
+  // REFER
   if(d==="refer"){
     return bot.sendMessage(id,
 `🎁 REFER SYSTEM
 
 https://t.me/${BOT_USERNAME}?start=${id}
 
-EARNING PLAN:
-1D ₹10
-7D ₹50
-15D ₹80
-30D ₹100
-60D ₹200`);
+1D=₹10
+7D=₹50
+15D=₹80
+30D=₹100
+60D=₹200`);
   }
 
+  // INFO
   if(d==="info"){
     return bot.sendMessage(id,
 `🔥 TRUSTED SELLER
@@ -257,11 +261,63 @@ EARNING PLAN:
 🛡️ SAFE SYSTEM`);
   }
 
+  // HELP
   if(d==="help"){
     return bot.sendMessage(id,
 `⚙️ HELP
 
-KEY / PAYMENT ISSUE
+KEY ISSUE / PAYMENT ISSUE
 DM 👉 @GODx_COBRA`);
   }
+
+  // ADMIN
+  if(d==="addstock"){
+    if(id!==ADMIN_ID) return;
+    return bot.sendMessage(id,"SELECT PLAN",{
+      reply_markup:{
+        inline_keyboard:[
+          [{text:"1D",callback_data:"plan1"}],
+          [{text:"7D",callback_data:"plan2"}],
+          [{text:"15D",callback_data:"plan3"}],
+          [{text:"30D",callback_data:"plan4"}],
+          [{text:"60D",callback_data:"plan5"}]
+        ]
+      }
+    });
+  }
+
+  if(d.startsWith("plan")){
+    if(id!==ADMIN_ID) return;
+    selectedPlan[id]=d;
+    return bot.sendMessage(id,"SEND KEYS");
+  }
+
+  if(d==="stats"){
+    if(id!==ADMIN_ID) return;
+
+    let users=await User.countDocuments();
+    let sales=await Sale.countDocuments();
+
+    return bot.sendMessage(id,
+`📊 ADMIN PANEL
+
+USERS: ${users}
+SALES: ${sales}
+
+${await getStock()}`);
+  }
+});
+
+// ===== ADMIN COMMAND =====
+bot.onText(/\/admin/,msg=>{
+  if(msg.from.id!==ADMIN_ID) return;
+
+  bot.sendMessage(msg.chat.id,"⚙️ ADMIN PANEL",{
+    reply_markup:{
+      inline_keyboard:[
+        [{text:"➕ ADD STOCK",callback_data:"addstock"}],
+        [{text:"📊 STATS",callback_data:"stats"}]
+      ]
+    }
+  });
 });
