@@ -21,7 +21,7 @@ app.listen(process.env.PORT || 3000);
 
 // ===== BOT =====
 const bot = new TelegramBot(token);
-const URL = process.env.RENDER_EXTERNAL_URL || "https://your-app.onrender.com";
+const URL = process.env.RENDER_EXTERNAL_URL;
 
 (async ()=>{
   await bot.deleteWebHook();
@@ -34,30 +34,12 @@ app.post(`/bot${token}`, (req,res)=>{
 });
 
 // ===== DB =====
-mongoose.connect(MONGO_URL,{
-  serverSelectionTimeoutMS:5000
-})
-.then(()=>console.log("MongoDB Connected ✅"))
-.catch(err=>console.log("Mongo Error ❌",err));
+mongoose.connect(MONGO_URL);
 
 // ===== MODELS =====
 const Key = mongoose.model("Key",{plan:String,key:String});
-
-const Sale = mongoose.model("Sale",{
-  user:String,
-  key:String,
-  plan:String,
-  expiry:Date,
-  utr:String,
-  createdAt:{type:Date,default:Date.now}
-});
-
-const User = mongoose.model("User",{
-  id:Number,
-  refBy:Number,
-  balance:{type:Number,default:0},
-  referrals:{type:Number,default:0}
-});
+const Sale = mongoose.model("Sale",{user:String,key:String,plan:String,expiry:Date,utr:String});
+const User = mongoose.model("User",{id:Number,refBy:Number,balance:{type:Number,default:0},referrals:{type:Number,default:0}});
 
 // ===== PLANS =====
 const plans = {
@@ -101,10 +83,8 @@ function home(id){
 bot.onText(/\/start (.+)/, async (msg,match)=>{
   let id=msg.from.id;
   let ref=parseInt(match[1]);
-
   let exist=await User.findOne({id});
   if(!exist) await User.create({id,refBy:ref});
-
   home(id);
 });
 
@@ -150,7 +130,6 @@ UTR:${msg.text}`,{
     return bot.sendMessage(id,"⏳ WAIT ADMIN");
   }
 
-  // ADD STOCK
   if(selectedPlan[id]){
     for(let k of msg.text.split("\n")){
       if(k.trim()){
@@ -161,15 +140,15 @@ UTR:${msg.text}`,{
     return bot.sendMessage(id,"✅ STOCK ADDED\n"+await getStock());
   }
 
-  // random → menu
   if(msg.text && !msg.text.startsWith("/")){
     home(id);
   }
 });
 
-// ===== BUTTON =====
+// ===== CALLBACK (SINGLE HANDLER) =====
 bot.on("callback_query", async q=>{
-  let d=q.data,id=q.from.id;
+  let d = q.data;
+  let id = q.from.id;
   bot.answerCallbackQuery(q.id);
 
   if(d==="buy"){
@@ -205,7 +184,6 @@ ${plans[p].name}`,
   if(d==="ss"){ waitingSS[id]=true; return bot.sendMessage(id,"SEND SCREENSHOT"); }
   if(d==="utr"){ waitingUTR[id]=true; return bot.sendMessage(id,"ENTER UTR",{reply_markup:{force_reply:true}}); }
 
-  // APPROVE
   if(d.startsWith("approve_")){
     let uid=d.split("_")[1];
 
@@ -215,15 +193,8 @@ ${plans[p].name}`,
     let exp=new Date();
     exp.setDate(exp.getDate()+userPlan[uid].days);
 
-    await Sale.create({
-      user:uid,
-      key:key.key,
-      plan:userPlan[uid].name,
-      expiry:exp,
-      utr:userUTR[uid]
-    });
+    await Sale.create({user:uid,key:key.key,plan:userPlan[uid].name,expiry:exp,utr:userUTR[uid]});
 
-    // referral
     let u=await User.findOne({id:uid});
     if(u?.refBy){
       await User.updateOne({id:u.refBy},{
@@ -254,15 +225,16 @@ KEY:${key.key}`);
 
     delete userPlan[uid];
     delete userUTR[uid];
+    return;
   }
 
   if(d.startsWith("reject_")){
     let uid=d.split("_")[1];
     bot.sendMessage(uid,"❌ PAYMENT REJECTED");
     delete userPlan[uid];
+    return;
   }
 
-  // ACCOUNT
   if(d==="account"){
     let u=await User.findOne({id});
     let active=await Sale.findOne({user:id,expiry:{$gt:new Date()}});
@@ -275,7 +247,6 @@ ${active?`🔑 ${active.key}\n📅 ${active.expiry}`:"NO ACTIVE PLAN"}
 👥 REFERRALS: ${u?.referrals||0}`);
   }
 
-  // REFER
   if(d==="refer"){
     return bot.sendMessage(id,
 `🎁 YOUR LINK
@@ -283,8 +254,24 @@ ${active?`🔑 ${active.key}\n📅 ${active.expiry}`:"NO ACTIVE PLAN"}
 https://t.me/${BOT_USERNAME}?start=${id}`);
   }
 
-  // ADMIN
+  if(d==="info"){
+    return bot.sendMessage(id,
+`📊 INFO
+
+🔥 TRUSTED SELLER
+⚡ FAST DELIVERY
+🛡️ SAFE SYSTEM`);
+  }
+
+  if(d==="help"){
+    return bot.sendMessage(id,
+`⚙️ HELP
+
+DM 👉 @GODx_COBRA`);
+  }
+
   if(d==="addstock"){
+    if(id!==ADMIN_ID) return;
     return bot.sendMessage(id,"SELECT PLAN",{
       reply_markup:{
         inline_keyboard:[
@@ -299,11 +286,14 @@ https://t.me/${BOT_USERNAME}?start=${id}`);
   }
 
   if(d.startsWith("plan")){
+    if(id!==ADMIN_ID) return;
     selectedPlan[id]=d;
     return bot.sendMessage(id,"SEND KEYS LINE BY LINE");
   }
 
   if(d==="stats"){
+    if(id!==ADMIN_ID) return;
+
     let users=await User.countDocuments();
     let sales=await Sale.countDocuments();
     let stock=await getStock();
@@ -318,7 +308,7 @@ ${stock}`);
   }
 });
 
-// ===== ADMIN =====
+// ===== ADMIN COMMAND =====
 bot.onText(/\/admin/,msg=>{
   if(msg.from.id!==ADMIN_ID) return;
 
