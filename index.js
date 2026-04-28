@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 
 // ===== CONFIG =====
 const token = process.env.BOT_TOKEN || "8304628992:AAFHjdhzF33fiH2QHjQScU9lK2zgqAx7nIc";
-const MONGO_URL = "mongodb+srv://sandipmeena8585_db_user:Tck2CfHfuw2Odb2k@cluster0.uqwcyyn.mongodb.net/cobra?retryWrites=true&w=majority";
+const MONGO_URL = "mongodb+srv://COBRA:Cobra%4012345@cluster0.uqwcyny.mongodb.net/cobra?retryWrites=true&w=majority";
 const ADMIN_ID = 7707237527;
 const BOT_USERNAME = "GODx_cobraBOT";
 
