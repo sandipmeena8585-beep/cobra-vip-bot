@@ -2,7 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const express = require("express");
 const mongoose = require("mongoose");
 
-// CONFIG
+// ===== CONFIG =====
 const token = process.env.BOT_TOKEN || "8304628992:AAFHjdhzF33fiH2QHjQScU9lK2zgqAx7nIc";
 const ADMIN_ID = 7707237527;
 const MONGO_URL = "mongodb+srv://COBRA:Cobra%4012345@cluster0.uqwcyny.mongodb.net/cobra?retryWrites=true&w=majority";
@@ -11,126 +11,94 @@ const CHANNEL_LINK = "https://t.me/+wRZN39fdVcRkYTM9";
 const UPI_ID = "godxcobra@axl";
 const QR_LINK = "https://images.weserv.nl/?url=raw.githubusercontent.com/sandipmeena8585-beep/cobra-bot/main/upi_qr.png";
 
-// SERVER
+// ===== SERVER =====
 const app = express();
 app.get("/", (req,res)=>res.send("RUNNING"));
 app.listen(process.env.PORT || 3000);
 
-// BOT
+// ===== BOT =====
 const bot = new TelegramBot(token,{polling:true});
 
-// DB
+// ===== DB =====
 mongoose.connect(MONGO_URL);
 
-// MODELS
+// ===== MODELS =====
 const Key = mongoose.model("Key",{plan:String,key:String});
 const Sale = mongoose.model("Sale",{user:String,key:String,plan:String,expiry:Date});
 const User = mongoose.model("User",{id:Number});
 
-// PLANS
+// ===== PLANS =====
 const plans = {
-  plan1:{name:"1 DAY",days:1},
-  plan2:{name:"7 DAY",days:7},
-  plan3:{name:"15 DAY",days:15},
-  plan4:{name:"30 DAY",days:30},
-  plan5:{name:"60 DAY",days:60}
+  plan1:{name:"𝐀 1 DAY",days:1},
+  plan2:{name:"𝐀 7 DAY",days:7},
+  plan3:{name:"𝐀 15 DAY",days:15},
+  plan4:{name:"𝐀 30 DAY",days:30},
+  plan5:{name:"𝐀 60 DAY",days:60}
 };
 
-// STATE
-let userPlan={}, selectedPlan={}, deleteMode={}, waitingUTR={}, waitingSS={}, userUTR={};
+// ===== STATE =====
+let userPlan={}, selectedPlan={}, deleteSelect={}, waitingUTR={}, waitingSS={};
 
-// HOME
+// ===== HOME =====
 function home(id){
-  bot.sendMessage(id,"COBRA PANEL",{
+  bot.sendMessage(id,
+`🏠 𝐂𝐎𝐁𝐑𝐀 𝐏𝐀𝐍𝐄𝐋
+━━━━━━━━━━━━━━`,{
     reply_markup:{
       inline_keyboard:[
-        [{text:"BUY",callback_data:"buy"}],
-        [{text:"ACCOUNT",callback_data:"account"}],
-        [{text:"INFO",callback_data:"info"}],
-        [{text:"HELP",callback_data:"help"}]
+        [{text:"🛒 𝐁𝐔𝐘",callback_data:"buy"}],
+        [{text:"👤 𝐀𝐂𝐂𝐎𝐔𝐍𝐓",callback_data:"account"}],
+        [{text:"📊 𝐈𝐍𝐅𝐎",callback_data:"info"}],
+        [{text:"⚙️ 𝐇𝐄𝐋𝐏",callback_data:"help"}]
       ]
     }
   });
 }
 
-// START
+// ===== START =====
 bot.onText(/\/start/, async msg=>{
   await User.updateOne({id:msg.from.id},{id:msg.from.id},{upsert:true});
   home(msg.from.id);
 });
 
-// MESSAGE
+// ===== MESSAGE =====
 bot.on("message", async msg=>{
-  let id = msg.from.id;
-
-  // DELETE
-  if(deleteMode[id]){
-    await Key.deleteOne({key:msg.text.trim()});
-    deleteMode[id]=false;
-    return bot.sendMessage(id,"KEY DELETED");
-  }
+  let id=msg.from.id;
 
   // ADD STOCK
   if(selectedPlan[id]){
-    let keys = msg.text.split("\n");
-    for(let k of keys){
-      if(k.trim()){
-        await Key.create({plan:selectedPlan[id],key:k.trim()});
-      }
+    for(let k of msg.text.split("\n")){
+      if(k.trim()) await Key.create({plan:selectedPlan[id],key:k.trim()});
     }
     selectedPlan[id]=null;
-    return bot.sendMessage(id,"STOCK ADDED");
-  }
-
-  // UTR
-  if(waitingUTR[id]){
-    userUTR[id]=msg.text;
-    waitingUTR[id]=false;
-
-    return bot.sendMessage(ADMIN_ID,
-`PAYMENT
-
-USER: ${id}
-PLAN: ${userPlan[id].name}
-UTR: ${msg.text}`,{
-      reply_markup:{
-        inline_keyboard:[[
-          {text:"VERIFY",callback_data:`approve_${id}`},
-          {text:"REJECT",callback_data:`reject_${id}`}
-        ]]
-      }
-    });
+    return bot.sendMessage(id,"✅ 𝐒𝐓𝐎𝐂𝐊 𝐀𝐃𝐃𝐄𝐃");
   }
 
   // SCREENSHOT
   if(waitingSS[id] && msg.photo){
     bot.sendPhoto(ADMIN_ID,msg.photo.pop().file_id,{
-      caption:`USER:${id}\nPLAN:${userPlan[id].name}`,
-      reply_markup:{
-        inline_keyboard:[[
-          {text:"VERIFY",callback_data:`approve_${id}`},
-          {text:"REJECT",callback_data:`reject_${id}`}
-        ]]
-      }
+      caption:`𝐔𝐒𝐄𝐑:${id}`
     });
-
     waitingSS[id]=false;
-    return bot.sendMessage(id,"WAIT ADMIN");
+    return bot.sendMessage(id,"⏳ 𝐖𝐀𝐈𝐓 𝐀𝐃𝐌𝐈𝐍");
   }
 
-  if(msg.text && !msg.text.startsWith("/")){
-    home(id);
+  // UTR
+  if(waitingUTR[id]){
+    waitingUTR[id]=false;
+    return bot.sendMessage(ADMIN_ID,`𝐔𝐓𝐑\n${msg.text}`);
   }
+
+  home(id);
 });
 
-// CALLBACK
+// ===== CALLBACK =====
 bot.on("callback_query", async q=>{
   let d=q.data,id=q.from.id;
   bot.answerCallbackQuery(q.id);
 
-  // BUY
   if(d==="buy"){
-    return bot.sendMessage(id,"SELECT PLAN",{
+    return bot.sendMessage(id,"𝐒𝐄𝐋𝐄𝐂𝐓 𝐏𝐋𝐀𝐍",{
       reply_markup:{
         inline_keyboard:Object.keys(plans).map(p=>[
           {text:plans[p].name,callback_data:`buy_${p}`}
@@ -139,35 +107,33 @@ bot.on("callback_query", async q=>{
     });
   }
 
-  // SELECT PLAN
   if(d.startsWith("buy_")){
     let p=d.split("_")[1];
     userPlan[id]={...plans[p],id:p};
 
     return bot.sendPhoto(id,QR_LINK,{
-      caption:`PAYMENT
+      caption:`💳 𝐏𝐀𝐘𝐌𝐄𝐍𝐓
 
-UPI:
 \`${UPI_ID}\``,
       parse_mode:"Markdown",
       reply_markup:{
         inline_keyboard:[
-          [{text:"SCREENSHOT",callback_data:"ss"}],
-          [{text:"ENTER UTR",callback_data:"utr"}]
+          [{text:"📸 𝐒𝐂𝐑𝐄𝐄𝐍𝐒𝐇𝐎𝐓",callback_data:"ss"}],
+          [{text:"💳 𝐄𝐍𝐓𝐄𝐑 𝐔𝐓𝐑",callback_data:"utr"}]
         ]
       }
     });
   }
 
-  if(d==="ss"){ waitingSS[id]=true; return bot.sendMessage(id,"SEND SS"); }
-  if(d==="utr"){ waitingUTR[id]=true; return bot.sendMessage(id,"ENTER UTR"); }
+  if(d==="ss"){ waitingSS[id]=true; return bot.sendMessage(id,"𝐒𝐄𝐍𝐃 𝐒𝐂𝐑𝐄𝐄𝐍𝐒𝐇𝐎𝐓"); }
+  if(d==="utr"){ waitingUTR[id]=true; return bot.sendMessage(id,"𝐄𝐍𝐓𝐄𝐑 𝐔𝐓𝐑"); }
 
   // APPROVE
   if(d.startsWith("approve_")){
     let uid=d.split("_")[1];
 
     let key=await Key.findOneAndDelete({plan:userPlan[uid].id});
-    if(!key) return bot.sendMessage(ADMIN_ID,"NO STOCK");
+    if(!key) return;
 
     let exp=new Date();
     exp.setDate(exp.getDate()+userPlan[uid].days);
@@ -175,102 +141,97 @@ UPI:
     await Sale.create({user:uid,key:key.key,plan:userPlan[uid].name,expiry:exp});
 
     bot.sendMessage(uid,
-`ENJOY COBRA SERVER  
+`𝐄𝐍𝐉𝐎𝐘 𝐂𝐎𝐁𝐑𝐀 𝐒𝐄𝐑𝐕𝐄𝐑  
 
-KEY - \`${key.key}\`  
+𝐊𝐄𝐘 - \`${key.key}\`  
 
-KILL LIMIT 10 12 LEGIT PLAY SAFE`,
+𝐊𝐈𝐋𝐋 𝐋𝐈𝐌𝐈𝐓 10 12 𝐋𝐄𝐆𝐈𝐓 𝐏𝐋𝐀𝐘 𝐒𝐀𝐅𝐄`,
 {
       parse_mode:"Markdown",
       reply_markup:{
         inline_keyboard:[
-          [{text:"JOIN GROUP",url:CHANNEL_LINK}]
+          [{text:"📦 𝐉𝐎𝐈𝐍 𝐆𝐑𝐎𝐔𝐏",url:CHANNEL_LINK}]
         ]
       }
     });
-
-    delete userPlan[uid];
   }
 
-  // ACCOUNT
   if(d==="account"){
     let latest=await Sale.findOne({user:id});
-    if(!latest) return bot.sendMessage(id,"NO PLAN");
+    if(!latest) return bot.sendMessage(id,"❌");
 
     return bot.sendMessage(id,
-`ACCOUNT
+`𝐀𝐂𝐂𝐎𝐔𝐍𝐓
 
-KEY - \`${latest.key}\`
+𝐊𝐄𝐘 - \`${latest.key}\`
 
-EXPIRE: ${latest.expiry}`,
-{parse_mode:"Markdown"});
+${latest.expiry}`,{parse_mode:"Markdown"});
   }
 
-  // INFO
   if(d==="info"){
     return bot.sendMessage(id,
-`COBRA SERVER
+`𝐂𝐎𝐁𝐑𝐀 𝐒𝐄𝐑𝐕𝐄𝐑
 
 ESP - 350M
 AIMBOT - 150M
 IPDA VIEW - YES / NO`);
   }
 
-  // HELP
   if(d==="help"){
     return bot.sendMessage(id,
-`KEY ISSUE
-PAYMENT ISSUE
+`𝐊𝐄𝐘 𝐈𝐒𝐒𝐔𝐄
+𝐏𝐀𝐘𝐌𝐄𝐍𝐓 𝐈𝐒𝐒𝐔𝐄
 
-MSG OWNER 👉 @GODx_COBRA`);
+@GODx_COBRA`);
   }
 
-  // ADMIN
+  // ===== ADMIN =====
   if(d==="addstock"){
     if(id!==ADMIN_ID) return;
-
-    return bot.sendMessage(id,"SELECT PLAN",{
+    return bot.sendMessage(id,"𝐒𝐄𝐋𝐄𝐂𝐓",{
       reply_markup:{
-        inline_keyboard:[
-          [{text:"1D",callback_data:"plan1"}],
-          [{text:"7D",callback_data:"plan2"}],
-          [{text:"15D",callback_data:"plan3"}],
-          [{text:"30D",callback_data:"plan4"}],
-          [{text:"60D",callback_data:"plan5"}]
-        ]
+        inline_keyboard:Object.keys(plans).map(p=>[
+          {text:plans[p].name,callback_data:`plan_${p}`}
+        ])
       }
     });
   }
 
-  if(d.startsWith("plan")){
-    if(id!==ADMIN_ID) return;
-    selectedPlan[id]=d;
-    return bot.sendMessage(id,"SEND KEYS");
+  if(d.startsWith("plan_")){
+    selectedPlan[id]=d.replace("plan_","");
+    return bot.sendMessage(id,"𝐒𝐄𝐍𝐃 𝐊𝐄𝐘𝐒");
   }
 
+  // DELETE FLOW
   if(d==="delkey"){
     if(id!==ADMIN_ID) return;
-    deleteMode[id]=true;
-    return bot.sendMessage(id,"SEND KEY TO DELETE");
+
+    let buttons = Object.keys(plans).map(p=>[
+      {text:plans[p].name,callback_data:`del_${p}`}
+    ]);
+
+    return bot.sendMessage(id,"𝐂𝐇𝐎𝐎𝐒𝐄 𝐏𝐋𝐀𝐍",{
+      reply_markup:{inline_keyboard:buttons}
+    });
   }
 
-  if(d==="stock"){
-    if(id!==ADMIN_ID) return;
+  if(d.startsWith("del_")){
+    let plan=d.replace("del_","");
+    let keys=await Key.find({plan});
 
-    let txt="LIVE STOCK\n\n";
-    for(let p in plans){
-      let c=await Key.countDocuments({plan:p});
-      txt+=`${plans[p].name}: ${c}\n`;
-    }
+    let btn = keys.slice(0,10).map(k=>[
+      {text:k.key,callback_data:`rem_${k._id}`}
+    ]);
 
-    return bot.sendMessage(id,txt);
+    return bot.sendMessage(id,"𝐒𝐄𝐋𝐄𝐂𝐓 𝐊𝐄𝐘",{
+      reply_markup:{inline_keyboard:btn}
+    });
   }
 
-  if(d==="sold"){
-    if(id!==ADMIN_ID) return;
-
-    let sold=await Sale.countDocuments();
-    return bot.sendMessage(id,"SOLD: "+sold);
+  if(d.startsWith("rem_")){
+    let idd=d.replace("rem_","");
+    await Key.deleteOne({_id:idd});
+    return bot.sendMessage(id,"🗑 𝐃𝐄𝐋𝐄𝐓𝐄𝐃");
   }
 });
 
@@ -278,13 +239,11 @@ MSG OWNER 👉 @GODx_COBRA`);
 bot.onText(/\/admin/,msg=>{
   if(msg.from.id!==ADMIN_ID) return;
 
-  bot.sendMessage(msg.chat.id,"ADMIN PANEL",{
+  bot.sendMessage(msg.chat.id,"𝐀𝐃𝐌𝐈𝐍",{
     reply_markup:{
       inline_keyboard:[
-        [{text:"ADD STOCK",callback_data:"addstock"}],
-        [{text:"LIVE STOCK",callback_data:"stock"}],
-        [{text:"SOLD",callback_data:"sold"}],
-        [{text:"DELETE KEY",callback_data:"delkey"}]
+        [{text:"➕ 𝐀𝐃𝐃",callback_data:"addstock"}],
+        [{text:"🗑 𝐃𝐄𝐋𝐄𝐓𝐄",callback_data:"delkey"}]
       ]
     }
   });
